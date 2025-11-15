@@ -281,9 +281,65 @@ async function handleNewObservationSubmit(event) {
 
 // ==================== AFFICHAGE DES OBSERVATIONS ====================
 async function loadAndDisplay() {
+    const isOnline = await checkConnection();
+    
+    // Si connecté, télécharger depuis MongoDB
+    if (isOnline) {
+        try {
+            console.log('📥 Téléchargement depuis MongoDB...');
+            const res = await fetch(`${API_BASE}/api/observations`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (res.ok) {
+                const mongoData = await res.json();
+                console.log(`✅ ${mongoData.length} observations trouvées sur MongoDB`);
+                
+                // Sauvegarder toutes les observations MongoDB localement
+                for (const obs of mongoData) {
+                    obs.synced = true;
+                    await saveObservation(obs);
+                }
+                
+                showMessage(`✅ ${mongoData.length} observations chargées depuis le serveur`, 'success');
+            }
+        } catch (err) {
+            console.error('❌ Erreur de téléchargement:', err);
+            showMessage('⚠️ Erreur de connexion au serveur, affichage des données locales', 'info');
+        }
+    }
+    
+    // Charger et afficher toutes les observations locales
     allObservations = await getAllLocal();
     displayObservations(allObservations);
+    
+    console.log(`📊 ${allObservations.length} observations affichées`);
 }
+```
+
+5. **Scrollez en bas** et cliquez sur **"Commit changes"**
+
+---
+
+## 🧪 Test :
+
+Après cette modification :
+
+1. **Attendez 2-3 minutes** (pour que GitHub Pages se mette à jour)
+2. **Ouvrez l'application** sur votre téléphone : `https://ayachikarama99-blp.github.io/tramway-mostaganem-pwa/`
+3. **Vous devriez voir** un message : "✅ X observations chargées depuis le serveur"
+4. **Toutes vos observations** MongoDB apparaîtront !
+
+---
+
+## 🔍 Vérification supplémentaire :
+
+Si ça ne marche toujours pas, vérifiez que votre API MongoDB retourne bien les données :
+
+**Ouvrez dans votre navigateur** :
+```
+https://tramway-pwa-backend.onrender.com/api/observations
 
 function displayObservations(observations) {
     const container = document.getElementById('observations-list');
