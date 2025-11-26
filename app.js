@@ -424,9 +424,9 @@ function viewDetails(id) {
 function generateEditForm(obs) {
     const renderComptageRows = (comptageData) => {
         if (!comptageData || comptageData.length === 0) {
-            return '<tr><td><input type="text" name="comptage_horaire[]" placeholder="HH:MM"></td><td><input type="number" name="comptage_montees[]" min="0" value="0"></td><td><input type="number" name="comptage_descentes[]" min="0" value="0"></td><td><input type="number" name="comptage_attente[]" min="0" value="0"></td><td><input type="text" name="comptage_observations[]" placeholder="Observations"></td></tr>';
+            return '<tr><td><input type="text" name="comptage_horaire" placeholder="HH:MM"></td><td><input type="number" name="comptage_montees" min="0" value="0"></td><td><input type="number" name="comptage_descentes" min="0" value="0"></td><td><input type="number" name="comptage_attente" min="0" value="0"></td><td><input type="text" name="comptage_observations" placeholder="Observations"></td></tr>';
         }
-        return comptageData.map(row => '<tr><td><input type="text" name="comptage_horaire[]" value="' + (row.horaire || '') + '" placeholder="HH:MM"></td><td><input type="number" name="comptage_montees[]" value="' + (row.montees || 0) + '" min="0"></td><td><input type="number" name="comptage_descentes[]" value="' + (row.descentes || 0) + '" min="0"></td><td><input type="number" name="comptage_attente[]" value="' + (row.attente || 0) + '" min="0"></td><td><input type="text" name="comptage_observations[]" value="' + (row.observations || '') + '" placeholder="Observations"></td></tr>').join('');
+        return comptageData.map(row => '<tr><td><input type="text" name="comptage_horaire" value="' + (row.horaire || '') + '" placeholder="HH:MM"></td><td><input type="number" name="comptage_montees" value="' + (row.montees || 0) + '" min="0"></td><td><input type="number" name="comptage_descentes" value="' + (row.descentes || 0) + '" min="0"></td><td><input type="number" name="comptage_attente" value="' + (row.attente || 0) + '" min="0"></td><td><input type="text" name="comptage_observations" value="' + (row.observations || '') + '" placeholder="Observations"></td></tr>').join('');
     };
 
     const obsId = obs.id || obs._id;
@@ -586,7 +586,7 @@ function generateEditForm(obs) {
     '<div class="form-group"><label>Questions méthodologiques</label><textarea name="questions_methodologiques" placeholder="Questions sur la méthode...">' + (obs.questions_methodologiques || '') + '</textarea></div></div>' +
     
     '<div style="display: flex; gap: 10px; margin-top: 20px;"><button type="submit" class="btn btn-primary" style="flex: 1; padding: 18px; font-size: 1.2em;">💾 Enregistrer</button>' +
-    '<button type="button" class="btn btn-warning" onclick="exportOne(' + obsId + ')" style="flex: 1; padding: 18px; font-size: 1.2em;">📥 Exporter</button></div></form>';
+    '<button type="button" class="btn btn-warning" onclick="exportOne('' + obsId + '')" style="flex: 1; padding: 18px; font-size: 1.2em;">📥 Exporter</button></div></form>';
 }
 
 function closeDetailsModal() {
@@ -684,6 +684,8 @@ async function handleEditSubmit(event) {
     try {
         // Sauvegarder localement d'abord
         await saveObservation(obs);
+        // Attendre que IndexedDB finisse d'écrire
+        await new Promise(resolve => setTimeout(resolve, 100));
         console.log('✅ Observation sauvegardée localement:', obs.id);
 
         // Fermer le modal
