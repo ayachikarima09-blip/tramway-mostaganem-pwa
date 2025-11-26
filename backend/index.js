@@ -17,7 +17,8 @@ let db;
 let observationsCollection;
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
-const DB_NAME = 'tramway-observations';
+const DB_NAME = 'tramway_db';
+
 
 MongoClient.connect(MONGO_URI)
     .then(client => {
