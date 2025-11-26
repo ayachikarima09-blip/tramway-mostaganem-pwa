@@ -698,7 +698,8 @@ async function handleEditSubmit(event) {
         const isOnline = await checkConnection();
         if (isOnline) {
             try {
-                const method = obs._id ? 'PUT' : 'POST';
+                const isValidId = obs._id && !obs._id.toString().startsWith('temp_') && obs._id.toString().length === 24;
+                const method = isValidId ? 'PUT' : 'POST';
                 const url = obs._id 
                     ? `${API_BASE}/api/observations/${obs._id}`
                     : `${API_BASE}/api/observations`;
@@ -753,7 +754,8 @@ async function syncOne(id) {
     try {
         normalizeObservation(obs);
 
-        const method = obs._id ? 'PUT' : 'POST';
+        const isValidId = obs._id && !obs._id.toString().startsWith('temp_') && obs._id.toString().length === 24;
+                const method = isValidId ? 'PUT' : 'POST';
         const url = obs._id 
             ? `${API_BASE}/api/observations/${obs._id}`
             : `${API_BASE}/api/observations`;
@@ -812,7 +814,8 @@ async function syncAll() {
         try {
             normalizeObservation(obs);
 
-            const method = obs._id ? 'PUT' : 'POST';
+            const isValidId = obs._id && !obs._id.toString().startsWith('temp_') && obs._id.toString().length === 24;
+                const method = isValidId ? 'PUT' : 'POST';
             const url = obs._id 
                 ? `${API_BASE}/api/observations/${obs._id}`
                 : `${API_BASE}/api/observations`;
