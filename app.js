@@ -7,17 +7,40 @@ let db;
 let allObservations = [];
 let currentEditId = null;
 
+// ==================== FONCTION DE NORMALISATION ====================
+function normalizeObservation(obs) {
+    // Synchroniser id et _id
+    if (obs._id && !obs.id) {
+        obs.id = typeof obs._id === 'object' ? obs._id.toString() : obs._id;
+    } else if (obs.id && !obs._id) {
+        obs._id = obs.id;
+    }
+
+    // S'assurer que les timestamps existent
+    if (!obs.created_at) {
+        obs.created_at = new Date().toISOString();
+    }
+    if (!obs.updated_at) {
+        obs.updated_at = obs.created_at;
+    }
+
+    // Initialiser version si absente
+    if (!obs.version) {
+        obs.version = 1;
+    }
+
+    return obs;
+}
+
 // ==================== BASE DE DONNÉES ====================
 async function initDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
-        
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
             db = request.result;
             resolve(db);
         };
-        
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -60,14 +83,13 @@ async function deleteLocal(id) {
 // ==================== CONNEXION ====================
 async function checkConnection() {
     try {
-        const res = await fetch(API_BASE + '/api/health', { 
+        const res = await fetch(API_BASE + '/api/health', {
             method: 'GET',
             cache: 'no-cache',
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await res.json();
         const status = document.getElementById('status');
-        
         if (res.ok && data.status === 'OK') {
             status.className = 'status-bar status-online';
             status.innerHTML = '<span class="status-indicator"></span><span>✅ Connecté à MongoDB</span>';
@@ -76,10 +98,9 @@ async function checkConnection() {
     } catch (err) {
         console.error('Connection error:', err);
     }
-    
     const status = document.getElementById('status');
     status.className = 'status-bar status-offline';
-    status.innerHTML = '<span class="status-indicator"></span><span>🔴 Hors ligne (Mode local)</span>';
+    status.innerHTML = '<span class="status-indicator"></span><span>📴 Hors ligne (Mode local)</span>';
     return false;
 }
 
@@ -89,18 +110,16 @@ function openNewObservationModal() {
     const form = document.getElementById('observation-form');
     form.reset();
     document.querySelector('#observation-form input[name="date"]').value = new Date().toISOString().split('T')[0];
-    
+
     const tbody = document.getElementById('comptage-table-new');
-    tbody.innerHTML = `
-        <tr>
-            <td><input type="text" name="comptage_horaire[]" placeholder="HH:MM"></td>
-            <td><input type="number" name="comptage_montees[]" min="0" value="0"></td>
-            <td><input type="number" name="comptage_descentes[]" min="0" value="0"></td>
-            <td><input type="number" name="comptage_attente[]" min="0" value="0"></td>
-            <td><input type="text" name="comptage_observations[]" placeholder="Observations"></td>
-        </tr>
-    `;
-    
+    tbody.innerHTML = `<tr>
+        <td><input type="text" name="comptage_horaire" placeholder="HH:MM"></td>
+        <td><input type="number" name="comptage_montees" min="0" value="0"></td>
+        <td><input type="number" name="comptage_descentes" min="0" value="0"></td>
+        <td><input type="number" name="comptage_attente" min="0" value="0"></td>
+        <td><input type="text" name="comptage_observations" placeholder="Observations"></td>
+    </tr>`;
+
     modal.style.display = 'block';
 }
 
@@ -111,41 +130,37 @@ function closeNewObservationModal() {
 function addComptageRowNew() {
     const tbody = document.getElementById('comptage-table-new');
     const newRow = document.createElement('tr');
-    newRow.innerHTML = `
-        <td><input type="text" name="comptage_horaire[]" placeholder="HH:MM"></td>
-        <td><input type="number" name="comptage_montees[]" min="0" value="0"></td>
-        <td><input type="number" name="comptage_descentes[]" min="0" value="0"></td>
-        <td><input type="number" name="comptage_attente[]" min="0" value="0"></td>
-        <td><input type="text" name="comptage_observations[]" placeholder="Observations"></td>
-    `;
+    newRow.innerHTML = `<td><input type="text" name="comptage_horaire" placeholder="HH:MM"></td>
+        <td><input type="number" name="comptage_montees" min="0" value="0"></td>
+        <td><input type="number" name="comptage_descentes" min="0" value="0"></td>
+        <td><input type="number" name="comptage_attente" min="0" value="0"></td>
+        <td><input type="text" name="comptage_observations" placeholder="Observations"></td>`;
     tbody.appendChild(newRow);
 }
 
 function addComptageRowEdit() {
     const tbody = document.getElementById('comptage-table-edit');
     const newRow = document.createElement('tr');
-    newRow.innerHTML = `
-        <td><input type="text" name="comptage_horaire[]" placeholder="HH:MM"></td>
-        <td><input type="number" name="comptage_montees[]" min="0" value="0"></td>
-        <td><input type="number" name="comptage_descentes[]" min="0" value="0"></td>
-        <td><input type="number" name="comptage_attente[]" min="0" value="0"></td>
-        <td><input type="text" name="comptage_observations[]" placeholder="Observations"></td>
-    `;
+    newRow.innerHTML = `<td><input type="text" name="comptage_horaire" placeholder="HH:MM"></td>
+        <td><input type="number" name="comptage_montees" min="0" value="0"></td>
+        <td><input type="number" name="comptage_descentes" min="0" value="0"></td>
+        <td><input type="number" name="comptage_attente" min="0" value="0"></td>
+        <td><input type="text" name="comptage_observations" placeholder="Observations"></td>`;
     tbody.appendChild(newRow);
 }
 
 function getCheckboxValues(name, formElement) {
-    const checkboxes = formElement.querySelectorAll('input[name="' + name + '"]:checked');
+    const checkboxes = formElement.querySelectorAll(`input[name="${name}"]:checked`);
     return Array.from(checkboxes).map(cb => cb.value);
 }
 
 function getComptageData(formElement) {
-    const horaires = formElement.querySelectorAll('input[name="comptage_horaire[]"]');
-    const montees = formElement.querySelectorAll('input[name="comptage_montees[]"]');
-    const descentes = formElement.querySelectorAll('input[name="comptage_descentes[]"]');
-    const attente = formElement.querySelectorAll('input[name="comptage_attente[]"]');
-    const observations = formElement.querySelectorAll('input[name="comptage_observations[]"]');
-    
+    const horaires = formElement.querySelectorAll('input[name="comptage_horaire"]');
+    const montees = formElement.querySelectorAll('input[name="comptage_montees"]');
+    const descentes = formElement.querySelectorAll('input[name="comptage_descentes"]');
+    const attente = formElement.querySelectorAll('input[name="comptage_attente"]');
+    const observations = formElement.querySelectorAll('input[name="comptage_observations"]');
+
     const comptage = [];
     for (let i = 0; i < horaires.length; i++) {
         const h = horaires[i].value;
@@ -164,82 +179,81 @@ function getComptageData(formElement) {
 
 async function handleNewObservationSubmit(event) {
     event.preventDefault();
-    
     const formData = new FormData(event.target);
-    
+
     const observation = {
-        id: Date.now(),
+        id: 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
         date: formData.get('date') || new Date().toISOString().split('T')[0],
-        jour: formData.get('jour') || '',
-        heure_debut: formData.get('heure_debut') || '',
-        heure_fin: formData.get('heure_fin') || '',
-        duree_totale: formData.get('duree_totale') || '',
-        lieu_station: formData.get('lieu_station') || '',
-        quartier: formData.get('quartier') || '',
+        jour: formData.get('jour'),
+        heure_debut: formData.get('heure_debut'),
+        heure_fin: formData.get('heure_fin'),
+        duree_totale: formData.get('duree_totale'),
+        lieu_station: formData.get('lieu_station'),
+        quartier: formData.get('quartier'),
         meteo: getCheckboxValues('meteo', event.target),
-        temperature: formData.get('temperature') || '',
-        type_observation: formData.get('type_observation') || '',
+        temperature: formData.get('temperature'),
+        type_observation: formData.get('type_observation'),
         type_espace: getCheckboxValues('type_espace', event.target),
-        intensite_interactions: formData.get('intensite_interactions') || '',
+        intensite_interactions: formData.get('intensite_interactions'),
         nature_patrimoine: getCheckboxValues('nature_patrimoine', event.target),
-        
         comptage_horaire: getComptageData(event.target),
-        frequence_intervalle: formData.get('frequence_intervalle') || '',
-        nombre_rames: formData.get('nombre_rames') || '',
-        profil_hommes: formData.get('profil_hommes') || '',
-        profil_femmes: formData.get('profil_femmes') || '',
-        profil_enfants: formData.get('profil_enfants') || '',
-        profil_adolescents: formData.get('profil_adolescents') || '',
-        profil_adultes: formData.get('profil_adultes') || '',
-        profil_ages: formData.get('profil_ages') || '',
-        profil_pmr: formData.get('profil_pmr') || '',
-        comportement_telephone: formData.get('comportement_telephone') || '',
-        comportement_telephone_detail: formData.get('comportement_telephone_detail') || '',
-        comportement_lecture: formData.get('comportement_lecture') || '',
-        comportement_lecture_detail: formData.get('comportement_lecture_detail') || '',
-        comportement_conversations: formData.get('comportement_conversations') || '',
-        comportement_conversations_detail: formData.get('comportement_conversations_detail') || '',
-        comportement_attente_assise: formData.get('comportement_attente_assise') || '',
-        comportement_attente_assise_detail: formData.get('comportement_attente_assise_detail') || '',
-        comportement_attente_debout: formData.get('comportement_attente_debout') || '',
-        comportement_attente_debout_detail: formData.get('comportement_attente_debout_detail') || '',
-        comportement_regard_fenetre: formData.get('comportement_regard_fenetre') || '',
-        comportement_regard_fenetre_detail: formData.get('comportement_regard_fenetre_detail') || '',
-        comportement_commerce: formData.get('comportement_commerce') || '',
-        comportement_commerce_detail: formData.get('comportement_commerce_detail') || '',
-        comportement_rassemblements: formData.get('comportement_rassemblements') || '',
-        comportement_rassemblements_detail: formData.get('comportement_rassemblements_detail') || '',
-        
-        ambiance_sonore: formData.get('ambiance_sonore') || '',
-        sons_dominants: formData.get('sons_dominants') || '',
-        ambiance_visuelle: formData.get('ambiance_visuelle') || '',
-        ambiance_olfactive: formData.get('ambiance_olfactive') || '',
-        atmosphere_generale: formData.get('atmosphere_generale') || '',
-        nature_interactions: formData.get('nature_interactions') || '',
-        groupes_sociaux_identifies: formData.get('groupes_sociaux_identifies') || '',
-        pratiques_sociales: formData.get('pratiques_sociales') || '',
-        conversations_verbatim: formData.get('conversations_verbatim') || '',
+        frequence_intervalle: formData.get('frequence_intervalle'),
+        nombre_rames: formData.get('nombre_rames'),
+        profil_hommes: formData.get('profil_hommes'),
+        profil_femmes: formData.get('profil_femmes'),
+        profil_enfants: formData.get('profil_enfants'),
+        profil_adolescents: formData.get('profil_adolescents'),
+        profil_adultes: formData.get('profil_adultes'),
+        profil_ages: formData.get('profil_ages'),
+        profil_pmr: formData.get('profil_pmr'),
+        comportement_telephone: formData.get('comportement_telephone'),
+        comportement_telephone_detail: formData.get('comportement_telephone_detail'),
+        comportement_lecture: formData.get('comportement_lecture'),
+        comportement_lecture_detail: formData.get('comportement_lecture_detail'),
+        comportement_conversations: formData.get('comportement_conversations'),
+        comportement_conversations_detail: formData.get('comportement_conversations_detail'),
+        comportement_attente_assise: formData.get('comportement_attente_assise'),
+        comportement_attente_assise_detail: formData.get('comportement_attente_assise_detail'),
+        comportement_attente_debout: formData.get('comportement_attente_debout'),
+        comportement_attente_debout_detail: formData.get('comportement_attente_debout_detail'),
+        comportement_regard_fenetre: formData.get('comportement_regard_fenetre'),
+        comportement_regard_fenetre_detail: formData.get('comportement_regard_fenetre_detail'),
+        comportement_commerce: formData.get('comportement_commerce'),
+        comportement_commerce_detail: formData.get('comportement_commerce_detail'),
+        comportement_rassemblements: formData.get('comportement_rassemblements'),
+        comportement_rassemblements_detail: formData.get('comportement_rassemblements_detail'),
+        ambiance_sonore: formData.get('ambiance_sonore'),
+        sons_dominants: formData.get('sons_dominants'),
+        ambiance_visuelle: formData.get('ambiance_visuelle'),
+        ambiance_olfactive: formData.get('ambiance_olfactive'),
+        atmosphere_generale: formData.get('atmosphere_generale'),
+        nature_interactions: formData.get('nature_interactions'),
+        groupes_sociaux_identifies: formData.get('groupes_sociaux_identifies'),
+        pratiques_sociales: formData.get('pratiques_sociales'),
+        conversations_verbatim: formData.get('conversations_verbatim'),
         langues_utilisees: getCheckboxValues('langues_utilisees', event.target),
-        thematiques_evoquees: formData.get('thematiques_evoquees') || '',
-        elements_patrimoniaux: formData.get('elements_patrimoniaux') || '',
-        etat_conservation: formData.get('etat_conservation') || '',
-        perception_patrimoine: formData.get('perception_patrimoine') || '',
-        
-        impressions_generales: formData.get('impressions_generales') || '',
-        elements_surprenants: formData.get('elements_surprenants') || '',
-        tensions_conflits: formData.get('tensions_conflits') || '',
-        appropriations_espace: formData.get('appropriations_espace') || '',
-        hypothese_1: formData.get('hypothese_1') || '',
-        hypothese_2: formData.get('hypothese_2') || '',
-        hypothese_3: formData.get('hypothese_3') || '',
-        
-        notes_complementaires: formData.get('notes_complementaires') || '',
-        pistes_prochaine: formData.get('pistes_prochaine') || '',
-        questions_methodologiques: formData.get('questions_methodologiques') || '',
-        
+        thematiques_evoquees: formData.get('thematiques_evoquees'),
+        elements_patrimoniaux: formData.get('elements_patrimoniaux'),
+        etat_conservation: formData.get('etat_conservation'),
+        perception_patrimoine: formData.get('perception_patrimoine'),
+        impressions_generales: formData.get('impressions_generales'),
+        elements_surprenants: formData.get('elements_surprenants'),
+        tensions_conflits: formData.get('tensions_conflits'),
+        appropriations_espace: formData.get('appropriations_espace'),
+        hypothese_1: formData.get('hypothese_1'),
+        hypothese_2: formData.get('hypothese_2'),
+        hypothese_3: formData.get('hypothese_3'),
+        notes_complementaires: formData.get('notes_complementaires'),
+        pistes_prochaine: formData.get('pistes_prochaine'),
+        questions_methodologiques: formData.get('questions_methodologiques'),
         synced: false,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        version: 1
     };
+
+    // Normaliser avant sauvegarde
+    normalizeObservation(observation);
 
     try {
         const isOnline = await checkConnection();
@@ -250,21 +264,33 @@ async function handleNewObservationSubmit(event) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(observation)
             });
-            
+
             if (res.ok) {
+                const data = await res.json();
+                // Récupérer _id de MongoDB
+                if (data._id) {
+                    observation._id = data._id;
+                    observation.id = data._id.toString();
+                }
+                if (data.version) {
+                    observation.version = data.version;
+                }
                 observation.synced = true;
                 showMessage('✅ Observation enregistrée et synchronisée avec le serveur !', 'success');
             }
         }
 
         await saveObservation(observation);
-        
+
         if (!observation.synced) {
             showMessage('💾 Observation enregistrée localement. Synchronisation en attente de connexion.', 'success');
         }
 
         closeNewObservationModal();
-        await loadAndDisplay();
+
+        // Recharger depuis le local uniquement
+        allObservations = await getAllLocal();
+        displayObservations(allObservations);
 
     } catch (error) {
         console.error('Erreur lors de la soumission:', error);
@@ -272,9 +298,10 @@ async function handleNewObservationSubmit(event) {
             await saveObservation(observation);
             showMessage('⚠️ Erreur réseau. Observation enregistrée localement pour synchronisation ultérieure.', 'error');
             closeNewObservationModal();
-            await loadAndDisplay();
+            allObservations = await getAllLocal();
+            displayObservations(allObservations);
         } catch (dbError) {
-            showMessage('❌ Erreur critique: Impossible d\'enregistrer localement.', 'error');
+            showMessage('❌ Erreur critique : Impossible d\'enregistrer localement.', 'error');
         }
     }
 }
@@ -283,106 +310,86 @@ async function handleNewObservationSubmit(event) {
 async function loadAndDisplay() {
     console.log('🔄 Démarrage loadAndDisplay...');
     const isOnline = await checkConnection();
-    
+
+    // Charger d'abord depuis le local
+    allObservations = await getAllLocal();
+    console.log(`💾 Observations locales chargées: ${allObservations.length}`);
+
+    // Afficher immédiatement les observations locales
+    displayObservations(allObservations);
+
+    // Si en ligne, synchroniser en arrière-plan SANS écraser le local
     if (isOnline) {
         try {
-            console.log('📥 Tentative de chargement depuis MongoDB...');
+            console.log('🌐 Synchronisation avec MongoDB en arrière-plan...');
             const res = await fetch(API_BASE + '/api/observations', {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
             });
-            
-            console.log('📡 Réponse reçue, status:', res.status);
-            
+
             if (res.ok) {
-                const responseData = await res.json();
-                console.log('📦 Données brutes reçues:', responseData);
-                
-                let mongoData = [];
-                
-                if (Array.isArray(responseData)) {
-                    mongoData = responseData;
-                    console.log('📊 Format détecté: Tableau direct');
-                } else if (typeof responseData === 'object' && responseData !== null) {
-                    if (Array.isArray(responseData.observations)) {
-                        mongoData = responseData.observations;
-                        console.log('📊 Format détecté: Objet avec propriété "observations"');
-                    } else if (Array.isArray(responseData.data)) {
-                        mongoData = responseData.data;
-                        console.log('📊 Format détecté: Objet avec propriété "data"');
-                    } else if (Array.isArray(responseData.results)) {
-                        mongoData = responseData.results;
-                        console.log('📊 Format détecté: Objet avec propriété "results"');
+                const response = await res.json();
+                let mongoData;
+
+                if (Array.isArray(response)) {
+                    mongoData = response;
+                } else if (response.observations && Array.isArray(response.observations)) {
+                    mongoData = response.observations;
+                } else if (response.data && Array.isArray(response.data)) {
+                    mongoData = response.data;
+                }
+
+                console.log(`☁️ Observations MongoDB: ${mongoData.length}`);
+
+                // Fusionner intelligemment
+                for (const mongoObs of mongoData) {
+                    // Normaliser l'observation MongoDB
+                    normalizeObservation(mongoObs);
+
+                    const localObs = allObservations.find(o => 
+                        (o._id === mongoObs._id) || 
+                        (o.id === mongoObs._id) ||
+                        (o._id === mongoObs.id)
+                    );
+
+                    if (!localObs) {
+                        // Pas de version locale → ajouter depuis MongoDB
+                        mongoObs.synced = true;
+                        await saveObservation(mongoObs);
+                        console.log('➕ Ajout depuis MongoDB:', mongoObs._id);
                     } else {
-                        const keys = Object.keys(responseData);
-                        for (const key of keys) {
-                            if (Array.isArray(responseData[key])) {
-                                mongoData = responseData[key];
-                                console.log('📊 Format détecté: Objet avec propriété "' + key + '"');
-                                break;
-                            }
+                        // Comparer les versions
+                        const mongoTime = new Date(mongoObs.updated_at || mongoObs.created_at);
+                        const localTime = new Date(localObs.updated_at || localObs.created_at);
+
+                        const mongoVersion = mongoObs.version || 0;
+                        const localVersion = localObs.version || 0;
+
+                        // MongoDB plus récent → mettre à jour local
+                        if (mongoTime > localTime || mongoVersion > localVersion) {
+                            mongoObs.id = localObs.id;
+                            mongoObs.synced = true;
+                            await saveObservation(mongoObs);
+                            console.log('🔄 MAJ depuis MongoDB:', mongoObs._id, `v${localVersion}→v${mongoVersion}`);
                         }
                     }
                 }
-                
-                if (!Array.isArray(mongoData)) {
-                    console.error('❌ ERREUR: Impossible de trouver un tableau dans la réponse!');
-                    console.error('Structure reçue:', responseData);
-                    mongoData = [];
-                }
-                
-                console.log('✅ Observations extraites:', mongoData.length);
-                if (mongoData.length > 0) {
-                    console.log('📋 Premier élément:', mongoData[0]);
-                }
-                
-                let savedCount = 0;
-                for (const obs of mongoData) {
-                    try {
-                        if (!obs.id) {
-                            obs.id = obs._id || Date.now() + Math.random();
-                        }
-                        obs.synced = true;
-                        await saveObservation(obs);
-                        savedCount++;
-                    } catch (err) {
-                        console.error('❌ Erreur sauvegarde observation:', err);
-                    }
-                }
-                
-                console.log('💾 Observations sauvegardées localement:', savedCount);
-                
-                if (mongoData.length > 0) {
-                    showMessage('✅ ' + mongoData.length + ' observations chargées depuis le serveur', 'success');
-                } else {
-                    console.log('ℹ️ Aucune observation sur le serveur');
-                }
-            } else {
-                console.warn('⚠️ Réponse non-OK:', res.status);
+
+                // Recharger et rafficher
+                allObservations = await getAllLocal();
+                displayObservations(allObservations);
             }
         } catch (err) {
-            console.error('❌ Erreur de chargement MongoDB:', err);
-            showMessage('⚠️ Impossible de charger depuis le serveur. Données locales affichées.', 'info');
+            console.error('❌ Erreur de synchronisation MongoDB:', err);
         }
-    } else {
-        console.log('🔴 Mode hors ligne');
-    }
-    
-    try {
-        allObservations = await getAllLocal();
-        console.log('📊 Observations locales chargées:', allObservations.length);
-        displayObservations(allObservations);
-    } catch (err) {
-        console.error('❌ Erreur chargement local:', err);
-        displayObservations([]);
     }
 }
 
 function displayObservations(observations) {
     const container = document.getElementById('observations-list');
-    
-    if (!observations || !Array.isArray(observations) || observations.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div style="font-size: 4em;">📋</div><h3>Aucune observation</h3><p>Créez votre première observation ou importez un fichier JSON</p></div>';
+
+    if (!observations || observations.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div style="font-size: 4em;">📝</div><h3>Aucune observation</h3><p>Créez votre première observation ou importez un fichier JSON</p></div>`;
         return;
     }
 
@@ -390,7 +397,7 @@ function displayObservations(observations) {
 
     container.innerHTML = observations.map(obs => {
         const obsId = obs.id || obs._id;
-        return '<div class="observation-card"><div class="observation-header"><div><div class="observation-title">' + (obs.lieu_station || 'Station non définie') + '</div><div style="color: #666; margin-top: 5px;">📅 ' + formatDate(obs.date) + ' ' + (obs.jour || '') + ' • ⏰ ' + (obs.heure_debut || '') + ' - ' + (obs.heure_fin || '') + '</div></div><span class="sync-badge ' + (obs.synced ? 'synced' : 'pending') + '">' + (obs.synced ? '✓ Sync' : '⏳ Local') + '</span></div><div class="observation-meta"><div class="meta-item"><span class="meta-label">Type</span>' + (obs.type_observation || 'N/A') + '</div><div class="meta-item"><span class="meta-label">Météo</span>' + (Array.isArray(obs.meteo) ? obs.meteo.join(', ') : obs.meteo || 'N/A') + '</div><div class="meta-item"><span class="meta-label">Température</span>' + (obs.temperature || 'N/A') + '°C</div></div>' + (obs.impressions_generales ? '<div class="observation-content"><strong>Impressions:</strong><br>' + obs.impressions_generales.substring(0, 200) + (obs.impressions_generales.length > 200 ? '...' : '') + '</div>' : '') + '<div class="observation-actions"><button class="btn btn-info btn-small" onclick="viewDetails(' + obsId + ')">👁️ Voir détails</button><button class="btn btn-warning btn-small" onclick="deleteObservation(' + obsId + ')">🗑️ Supprimer</button>' + (!obs.synced ? '<button class="btn btn-secondary btn-small" onclick="syncOne(' + obsId + ')">🔄 Sync</button>' : '') + '</div></div>';
+        return `<div class="observation-card"><div class="observation-header"><div><div class="observation-title">${obs.lieu_station || 'Station non définie'}</div><div style="color: #666; margin-top: 5px;">${formatDate(obs.date)} · ${obs.jour || ''} · ${obs.heure_debut} - ${obs.heure_fin}</div></div><div><span class="sync-badge ${obs.synced ? 'synced' : 'pending'}">${obs.synced ? '✓ Sync' : '⏳ Local'}</span></div></div><div class="observation-meta"><div class="meta-item"><span class="meta-label">Type:</span> ${obs.type_observation || 'N/A'}</div><div class="meta-item"><span class="meta-label">Météo:</span> ${Array.isArray(obs.meteo) ? obs.meteo.join(', ') : obs.meteo || 'N/A'}</div><div class="meta-item"><span class="meta-label">Température:</span> ${obs.temperature || 'N/A'}°C</div></div>${obs.impressions_generales ? `<div class="observation-content"><strong>Impressions:</strong><br>${obs.impressions_generales.substring(0, 200)}${obs.impressions_generales.length > 200 ? '...' : ''}</div>` : ''}<div class="observation-actions"><button class="btn btn-info btn-small" onclick="viewDetails('${obsId}')">Voir détails</button><button class="btn btn-warning btn-small" onclick="deleteObservation('${obsId}')">Supprimer</button>${!obs.synced ? `<button class="btn btn-secondary btn-small" onclick="syncOne('${obsId}')">Sync</button>` : ''}</div></div>`;
     }).join('');
 }
 
@@ -404,233 +411,182 @@ function formatDate(dateStr) {
 
 // ==================== DÉTAILS ET ÉDITION ====================
 function viewDetails(id) {
-    const obs = allObservations.find(o => (o.id === id || o._id === id));
+    const obs = allObservations.find(o => o.id === id || o._id === id);
     if (!obs) return;
 
     currentEditId = id;
     const modal = document.getElementById('details-modal');
     const body = document.getElementById('modal-body');
-    
     body.innerHTML = generateEditForm(obs);
-    
     modal.style.display = 'block';
 }
 
 function generateEditForm(obs) {
+    const renderComptageRows = (comptageData) => {
+        if (!comptageData || comptageData.length === 0) {
+            return '<tr><td><input type="text" name="comptage_horaire[]" placeholder="HH:MM"></td><td><input type="number" name="comptage_montees[]" min="0" value="0"></td><td><input type="number" name="comptage_descentes[]" min="0" value="0"></td><td><input type="number" name="comptage_attente[]" min="0" value="0"></td><td><input type="text" name="comptage_observations[]" placeholder="Observations"></td></tr>';
+        }
+        return comptageData.map(row => '<tr><td><input type="text" name="comptage_horaire[]" value="' + (row.horaire || '') + '" placeholder="HH:MM"></td><td><input type="number" name="comptage_montees[]" value="' + (row.montees || 0) + '" min="0"></td><td><input type="number" name="comptage_descentes[]" value="' + (row.descentes || 0) + '" min="0"></td><td><input type="number" name="comptage_attente[]" value="' + (row.attente || 0) + '" min="0"></td><td><input type="text" name="comptage_observations[]" value="' + (row.observations || '') + '" placeholder="Observations"></td></tr>').join('');
+    };
+
     const obsId = obs.id || obs._id;
     
-    // Fonction helper pour générer les checkboxes
-    const makeCheckbox = (name, value, checked) => {
-        return '<div class="checkbox-item"><input type="checkbox" name="' + name + '" value="' + value + '" ' + (checked ? 'checked' : '') + '><label>' + value + '</label></div>';
-    };
+    // Helpers pour les checkboxes
+    const meteoChecked = function(val) { return (Array.isArray(obs.meteo) && obs.meteo.includes(val)) ? 'checked' : ''; };
+    const typeEspaceChecked = function(val) { return (Array.isArray(obs.type_espace) && obs.type_espace.includes(val)) ? 'checked' : ''; };
+    const naturePatrimoineChecked = function(val) { return (Array.isArray(obs.nature_patrimoine) && obs.nature_patrimoine.includes(val)) ? 'checked' : ''; };
+    const languesChecked = function(val) { return (Array.isArray(obs.langues_utilisees) && obs.langues_utilisees.includes(val)) ? 'checked' : ''; };
     
-    // Fonction helper pour générer les options de select
-    const makeOption = (value, selected, label) => {
-        return '<option value="' + value + '" ' + (selected ? 'selected' : '') + '>' + (label || value) + '</option>';
-    };
-    
-    // Générer les lignes du tableau de comptage
-    let comptageRows = '';
-    if (obs.comptage_horaire && obs.comptage_horaire.length > 0) {
-        obs.comptage_horaire.forEach(row => {
-            comptageRows += '<tr>';
-            comptageRows += '<td><input type="text" name="comptage_horaire[]" value="' + (row.horaire || '') + '" placeholder="HH:MM"></td>';
-            comptageRows += '<td><input type="number" name="comptage_montees[]" value="' + (row.montees || 0) + '" min="0"></td>';
-            comptageRows += '<td><input type="number" name="comptage_descentes[]" value="' + (row.descentes || 0) + '" min="0"></td>';
-            comptageRows += '<td><input type="number" name="comptage_attente[]" value="' + (row.attente || 0) + '" min="0"></td>';
-            comptageRows += '<td><input type="text" name="comptage_observations[]" value="' + (row.observations || '') + '" placeholder="Observations"></td>';
-            comptageRows += '</tr>';
-        });
-    } else {
-        comptageRows = '<tr><td><input type="text" name="comptage_horaire[]" placeholder="HH:MM"></td><td><input type="number" name="comptage_montees[]" min="0" value="0"></td><td><input type="number" name="comptage_descentes[]" min="0" value="0"></td><td><input type="number" name="comptage_attente[]" min="0" value="0"></td><td><input type="text" name="comptage_observations[]" placeholder="Observations"></td></tr>';
-    }
-    
-    // Générer les checkboxes météo
-    let meteoChecks = '';
-    const meteoOptions = ['Ensoleillé', 'Nuageux', 'Pluie', 'Vent'];
-    const meteoSelected = Array.isArray(obs.meteo) ? obs.meteo : [];
-    meteoOptions.forEach(opt => {
-        meteoChecks += makeCheckbox('meteo', opt, meteoSelected.includes(opt));
-    });
-    
-    // Générer les checkboxes type_espace
-    let espaceChecks = '';
-    const espaceOptions = ['TE-S: Station de tramway', 'TE-B: À bord du tramway', 'TE-A: Abords immédiats (<50m)', 'TE-P: Espace public connexe', 'TE-C: Corridor/axe du tramway'];
-    const espaceSelected = Array.isArray(obs.type_espace) ? obs.type_espace : [];
-    espaceOptions.forEach(opt => {
-        espaceChecks += makeCheckbox('type_espace', opt, espaceSelected.includes(opt));
-    });
-    
-    // Générer les checkboxes nature_patrimoine
-    let patrimoineChecks = '';
-    const patrimoineOptions = ['NP-A: Architecture coloniale', 'NP-B: Bâti traditionnel', 'NP-C: Architecture moderne/contemporaine', 'NP-P: Patrimoine paysager', 'NP-I: Patrimoine immatériel', 'NP-M: Patrimoine mémoriel'];
-    const patrimoineSelected = Array.isArray(obs.nature_patrimoine) ? obs.nature_patrimoine : [];
-    patrimoineOptions.forEach(opt => {
-        patrimoineChecks += makeCheckbox('nature_patrimoine', opt, patrimoineSelected.includes(opt));
-    });
-    
-    // Générer les checkboxes langues
-    let languesChecks = '';
-    const languesOptions = ['Arabe dialectal', 'Français', 'Tamazight', 'Mixte'];
-    const languesSelected = Array.isArray(obs.langues_utilisees) ? obs.langues_utilisees : [];
-    languesOptions.forEach(opt => {
-        languesChecks += makeCheckbox('langues_utilisees', opt, languesSelected.includes(opt));
-    });
-    
-    // Commencer à construire le formulaire
-    let html = '<form id="edit-form" onsubmit="handleEditSubmit(event)">';
+    return '<form id="edit-form" onsubmit="handleEditSubmit(event)">' +
     
     // SECTION IDENTIFICATION
-    html += '<div class="form-section"><h3>📋 IDENTIFICATION DE LA SESSION</h3>';
-    html += '<div class="form-row">';
-    html += '<div class="form-group"><label>Date *</label><input type="date" name="date" value="' + (obs.date || '') + '" required></div>';
-    html += '<div class="form-group"><label>Jour</label><select name="jour"><option value="">Sélectionner</option>';
-    ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'].forEach(j => {
-        html += makeOption(j, obs.jour === j);
-    });
-    html += '</select></div></div>';
+    '<div class="form-section"><h3>📋 IDENTIFICATION DE LA SESSION</h3>' +
+    '<div class="form-row"><div class="form-group"><label>Date *</label><input type="date" name="date" value="' + (obs.date || '') + '" required></div>' +
+    '<div class="form-group"><label>Jour</label><select name="jour"><option value="">Sélectionner</option>' +
+    ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'].map(j => '<option value="' + j + '" ' + (obs.jour === j ? 'selected' : '') + '>' + j + '</option>').join('') +
+    '</select></div></div>' +
     
-    html += '<div class="form-row">';
-    html += '<div class="form-group"><label>Heure début</label><input type="time" name="heure_debut" value="' + (obs.heure_debut || '') + '"></div>';
-    html += '<div class="form-group"><label>Heure fin</label><input type="time" name="heure_fin" value="' + (obs.heure_fin || '') + '"></div>';
-    html += '<div class="form-group"><label>Durée totale (min)</label><input type="number" name="duree_totale" value="' + (obs.duree_totale || '') + '" min="0"></div>';
-    html += '</div>';
+    '<div class="form-row"><div class="form-group"><label>Heure début</label><input type="time" name="heure_debut" value="' + (obs.heure_debut || '') + '"></div>' +
+    '<div class="form-group"><label>Heure fin</label><input type="time" name="heure_fin" value="' + (obs.heure_fin || '') + '"></div>' +
+    '<div class="form-group"><label>Durée totale (min)</label><input type="number" name="duree_totale" value="' + (obs.duree_totale || '') + '" min="0"></div></div>' +
     
-    html += '<div class="form-row">';
-    html += '<div class="form-group"><label>Station/Tronçon</label><input type="text" name="lieu_station" value="' + (obs.lieu_station || '') + '"></div>';
-    html += '<div class="form-group"><label>Quartier</label><input type="text" name="quartier" value="' + (obs.quartier || '') + '"></div>';
-    html += '</div>';
+    '<div class="form-row"><div class="form-group"><label>Station/Tronçon</label><input type="text" name="lieu_station" value="' + (obs.lieu_station || '') + '"></div>' +
+    '<div class="form-group"><label>Quartier</label><input type="text" name="quartier" value="' + (obs.quartier || '') + '"></div></div>' +
     
-    html += '<div class="form-group"><label>Météo (plusieurs choix possibles)</label><div class="checkbox-group">' + meteoChecks + '</div></div>';
+    '<div class="form-group"><label>Météo</label><div class="checkbox-group">' +
+    '<div class="checkbox-item"><input type="checkbox" name="meteo" value="Ensoleillé" ' + meteoChecked('Ensoleillé') + '><label>Ensoleillé</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="meteo" value="Nuageux" ' + meteoChecked('Nuageux') + '><label>Nuageux</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="meteo" value="Pluie" ' + meteoChecked('Pluie') + '><label>Pluie</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="meteo" value="Vent" ' + meteoChecked('Vent') + '><label>Vent</label></div>' +
+    '</div></div>' +
     
-    html += '<div class="form-row">';
-    html += '<div class="form-group"><label>Température estimée (°C)</label><input type="number" name="temperature" value="' + (obs.temperature || '') + '" min="-10" max="60"></div>';
-    html += '<div class="form-group"><label>Type d\'observation</label><select name="type_observation"><option value="">Sélectionner</option>';
-    ['Statique (poste fixe)', 'Mobile (parcours)', 'Mixte'].forEach(t => {
-        html += makeOption(t, obs.type_observation === t);
-    });
-    html += '</select></div></div>';
+    '<div class="form-row"><div class="form-group"><label>Température (°C)</label><input type="number" name="temperature" value="' + (obs.temperature || '') + '" min="-10" max="60"></div>' +
+    '<div class="form-group"><label>Type d\'observation</label><select name="type_observation"><option value="">Sélectionner</option>' +
+    ['Statique (poste fixe)', 'Mobile (parcours)', 'Mixte'].map(t => '<option value="' + t + '" ' + (obs.type_observation === t ? 'selected' : '') + '>' + t + '</option>').join('') +
+    '</select></div></div>' +
     
-    html += '<div class="form-group"><label>Type d\'espace observé (TE) - MULTICHOIX</label><div class="checkbox-group">' + espaceChecks + '</div></div>';
+    '<div class="form-group"><label>Type d\'espace (TE)</label><div class="checkbox-group">' +
+    '<div class="checkbox-item"><input type="checkbox" name="type_espace" value="TE-S: Station de tramway" ' + typeEspaceChecked('TE-S: Station de tramway') + '><label>TE-S: Station</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="type_espace" value="TE-B: À bord du tramway" ' + typeEspaceChecked('TE-B: À bord du tramway') + '><label>TE-B: À bord</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="type_espace" value="TE-A: Abords immédiats (<50m)" ' + typeEspaceChecked('TE-A: Abords immédiats (<50m)') + '><label>TE-A: Abords</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="type_espace" value="TE-P: Espace public connexe" ' + typeEspaceChecked('TE-P: Espace public connexe') + '><label>TE-P: Espace public</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="type_espace" value="TE-C: Corridor/axe du tramway" ' + typeEspaceChecked('TE-C: Corridor/axe du tramway') + '><label>TE-C: Corridor</label></div>' +
+    '</div></div>' +
     
-    html += '<div class="form-group"><label>Intensité des interactions (II)</label><select name="intensite_interactions"><option value="">Sélectionner</option>';
-    ['II-1: Faible (interactions isolées)', 'II-2: Modérée (interactions régulières)', 'II-3: Forte (espace très animé)', 'II-4: Très forte (événement/concentration)'].forEach(i => {
-        html += makeOption(i, obs.intensite_interactions === i);
-    });
-    html += '</select></div>';
+    '<div class="form-group"><label>Intensité interactions</label><select name="intensite_interactions"><option value="">Sélectionner</option>' +
+    ['II-1: Faible (interactions isolées)', 'II-2: Modérée (interactions régulières)', 'II-3: Forte (espace très animé)', 'II-4: Très forte (événement/concentration)'].map(ii => '<option value="' + ii + '" ' + (obs.intensite_interactions === ii ? 'selected' : '') + '>' + ii + '</option>').join('') +
+    '</select></div>' +
     
-    html += '<div class="form-group"><label>Nature du patrimoine visible (NP) - MULTICHOIX</label><div class="checkbox-group">' + patrimoineChecks + '</div></div>';
-    html += '</div>'; // Fin SECTION IDENTIFICATION
+    '<div class="form-group"><label>Nature patrimoine (NP)</label><div class="checkbox-group">' +
+    '<div class="checkbox-item"><input type="checkbox" name="nature_patrimoine" value="NP-A: Architecture coloniale" ' + naturePatrimoineChecked('NP-A: Architecture coloniale') + '><label>NP-A: Coloniale</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="nature_patrimoine" value="NP-B: Bâti traditionnel" ' + naturePatrimoineChecked('NP-B: Bâti traditionnel') + '><label>NP-B: Traditionnel</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="nature_patrimoine" value="NP-C: Architecture moderne/contemporaine" ' + naturePatrimoineChecked('NP-C: Architecture moderne/contemporaine') + '><label>NP-C: Moderne</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="nature_patrimoine" value="NP-P: Patrimoine paysager" ' + naturePatrimoineChecked('NP-P: Patrimoine paysager') + '><label>NP-P: Paysager</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="nature_patrimoine" value="NP-I: Patrimoine immatériel" ' + naturePatrimoineChecked('NP-I: Patrimoine immatériel') + '><label>NP-I: Immatériel</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="nature_patrimoine" value="NP-M: Patrimoine mémoriel" ' + naturePatrimoineChecked('NP-M: Patrimoine mémoriel') + '><label>NP-M: Mémoriel</label></div>' +
+    '</div></div></div>' +
     
-    // SECTION 1: DONNÉES QUANTITATIVES
-    html += '<div class="form-section"><h3>📊 SECTION 1: DONNÉES QUANTITATIVES</h3>';
-    html += '<h4>Flux et Fréquentation</h4>';
-    html += '<div class="form-group"><label>Comptage des usagers</label>';
-    html += '<table class="counting-table"><thead><tr><th>Horaire</th><th>Montées</th><th>Descentes</th><th>Attente</th><th>Observations</th></tr></thead>';
-    html += '<tbody id="comptage-table-edit">' + comptageRows + '</tbody></table>';
-    html += '<button type="button" class="add-row-btn" onclick="addComptageRowEdit()">➕ Ajouter une ligne</button></div>';
+    // SECTION QUANTITATIVE
+    '<div class="form-section"><h3>📊 DONNÉES QUANTITATIVES</h3><h4>Flux et Fréquentation</h4>' +
+    '<div class="form-group"><label>Comptage usagers</label><table class="counting-table"><thead><tr><th>Horaire</th><th>Montées</th><th>Descentes</th><th>Attente</th><th>Observations</th></tr></thead>' +
+    '<tbody id="comptage-table-edit">' + renderComptageRows(obs.comptage_horaire || []) + '</tbody></table>' +
+    '<button type="button" class="add-row-btn" onclick="addComptageRowEdit()">➕ Ajouter ligne</button></div>' +
     
-    html += '<div class="form-row">';
-    html += '<div class="form-group"><label>Fréquence des rames - Intervalle moyen (min)</label><input type="number" name="frequence_intervalle" value="' + (obs.frequence_intervalle || '') + '" min="0"></div>';
-    html += '<div class="form-group"><label>Nombre de rames passées</label><input type="number" name="nombre_rames" value="' + (obs.nombre_rames || '') + '" min="0"></div>';
-    html += '</div>';
+    '<div class="form-row"><div class="form-group"><label>Fréquence rames (min)</label><input type="number" name="frequence_intervalle" value="' + (obs.frequence_intervalle || '') + '" min="0"></div>' +
+    '<div class="form-group"><label>Nombre rames</label><input type="number" name="nombre_rames" value="' + (obs.nombre_rames || '') + '" min="0"></div></div>' +
     
-    html += '<h4>Profil des Usagers (% approximatif)</h4>';
-    html += '<div class="form-row">';
-    html += '<div class="form-group"><label>Hommes (%)</label><input type="number" name="profil_hommes" value="' + (obs.profil_hommes || '') + '" min="0" max="100"></div>';
-    html += '<div class="form-group"><label>Femmes (%)</label><input type="number" name="profil_femmes" value="' + (obs.profil_femmes || '') + '" min="0" max="100"></div>';
-    html += '<div class="form-group"><label>Enfants &lt; 12 ans (%)</label><input type="number" name="profil_enfants" value="' + (obs.profil_enfants || '') + '" min="0" max="100"></div>';
-    html += '</div>';
+    '<h4>Profil Usagers (%)</h4>' +
+    '<div class="form-row"><div class="form-group"><label>Hommes</label><input type="number" name="profil_hommes" value="' + (obs.profil_hommes || '') + '" min="0" max="100"></div>' +
+    '<div class="form-group"><label>Femmes</label><input type="number" name="profil_femmes" value="' + (obs.profil_femmes || '') + '" min="0" max="100"></div>' +
+    '<div class="form-group"><label>Enfants</label><input type="number" name="profil_enfants" value="' + (obs.profil_enfants || '') + '" min="0" max="100"></div></div>' +
     
-    html += '<div class="form-row">';
-    html += '<div class="form-group"><label>Adolescents 12-18 (%)</label><input type="number" name="profil_adolescents" value="' + (obs.profil_adolescents || '') + '" min="0" max="100"></div>';
-    html += '<div class="form-group"><label>Adultes 18-65 (%)</label><input type="number" name="profil_adultes" value="' + (obs.profil_adultes || '') + '" min="0" max="100"></div>';
-    html += '<div class="form-group"><label>Personnes âgées &gt; 65 (%)</label><input type="number" name="profil_ages" value="' + (obs.profil_ages || '') + '" min="0" max="100"></div>';
-    html += '</div>';
+    '<div class="form-row"><div class="form-group"><label>Adolescents</label><input type="number" name="profil_adolescents" value="' + (obs.profil_adolescents || '') + '" min="0" max="100"></div>' +
+    '<div class="form-group"><label>Adultes</label><input type="number" name="profil_adultes" value="' + (obs.profil_adultes || '') + '" min="0" max="100"></div>' +
+    '<div class="form-group"><label>Âgés</label><input type="number" name="profil_ages" value="' + (obs.profil_ages || '') + '" min="0" max="100"></div></div>' +
     
-    html += '<div class="form-group"><label>PMR (Personnes à Mobilité Réduite) (%)</label><input type="number" name="profil_pmr" value="' + (obs.profil_pmr || '') + '" min="0" max="100"></div>';
+    '<div class="form-group"><label>PMR (%)</label><input type="number" name="profil_pmr" value="' + (obs.profil_pmr || '') + '" min="0" max="100"></div>' +
     
-    html += '<h4>Comportements Observables</h4>';
-    html += '<div class="form-group">';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_telephone" value="oui" ' + (obs.comportement_telephone ? 'checked' : '') + '><label>Utilisation du téléphone</label><input type="text" name="comportement_telephone_detail" value="' + (obs.comportement_telephone_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_lecture" value="oui" ' + (obs.comportement_lecture ? 'checked' : '') + '><label>Lecture/journal</label><input type="text" name="comportement_lecture_detail" value="' + (obs.comportement_lecture_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_conversations" value="oui" ' + (obs.comportement_conversations ? 'checked' : '') + '><label>Conversations</label><input type="text" name="comportement_conversations_detail" value="' + (obs.comportement_conversations_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_attente_assise" value="oui" ' + (obs.comportement_attente_assise ? 'checked' : '') + '><label>Attente assise</label><input type="text" name="comportement_attente_assise_detail" value="' + (obs.comportement_attente_assise_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_attente_debout" value="oui" ' + (obs.comportement_attente_debout ? 'checked' : '') + '><label>Attente debout</label><input type="text" name="comportement_attente_debout_detail" value="' + (obs.comportement_attente_debout_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_regard_fenetre" value="oui" ' + (obs.comportement_regard_fenetre ? 'checked' : '') + '><label>Regarder à travers la fenêtre/dans le vide</label><input type="text" name="comportement_regard_fenetre_detail" value="' + (obs.comportement_regard_fenetre_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_commerce" value="oui" ' + (obs.comportement_commerce ? 'checked' : '') + '><label>Activités commerciales informelles</label><input type="text" name="comportement_commerce_detail" value="' + (obs.comportement_commerce_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_rassemblements" value="oui" ' + (obs.comportement_rassemblements ? 'checked' : '') + '><label>Rassemblements/groupes</label><input type="text" name="comportement_rassemblements_detail" value="' + (obs.comportement_rassemblements_detail || '') + '" placeholder="% ou détails"></div>';
-    html += '</div></div>'; // Fin SECTION 1
+    '<h4>Comportements</h4>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_telephone" value="oui" ' + (obs.comportement_telephone ? 'checked' : '') + '><label>Téléphone</label>' +
+    '<input type="text" name="comportement_telephone_detail" value="' + (obs.comportement_telephone_detail || '') + '" placeholder="détails"></div>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_lecture" value="oui" ' + (obs.comportement_lecture ? 'checked' : '') + '><label>Lecture</label>' +
+    '<input type="text" name="comportement_lecture_detail" value="' + (obs.comportement_lecture_detail || '') + '" placeholder="détails"></div>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_conversations" value="oui" ' + (obs.comportement_conversations ? 'checked' : '') + '><label>Conversations</label>' +
+    '<input type="text" name="comportement_conversations_detail" value="' + (obs.comportement_conversations_detail || '') + '" placeholder="détails"></div>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_attente_assise" value="oui" ' + (obs.comportement_attente_assise ? 'checked' : '') + '><label>Attente assise</label>' +
+    '<input type="text" name="comportement_attente_assise_detail" value="' + (obs.comportement_attente_assise_detail || '') + '" placeholder="détails"></div>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_attente_debout" value="oui" ' + (obs.comportement_attente_debout ? 'checked' : '') + '><label>Attente debout</label>' +
+    '<input type="text" name="comportement_attente_debout_detail" value="' + (obs.comportement_attente_debout_detail || '') + '" placeholder="détails"></div>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_regard_fenetre" value="oui" ' + (obs.comportement_regard_fenetre ? 'checked' : '') + '><label>Regard fenêtre</label>' +
+    '<input type="text" name="comportement_regard_fenetre_detail" value="' + (obs.comportement_regard_fenetre_detail || '') + '" placeholder="détails"></div>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_commerce" value="oui" ' + (obs.comportement_commerce ? 'checked' : '') + '><label>Commerce informel</label>' +
+    '<input type="text" name="comportement_commerce_detail" value="' + (obs.comportement_commerce_detail || '') + '" placeholder="détails"></div>' +
+    '<div class="checkbox-with-detail"><input type="checkbox" name="comportement_rassemblements" value="oui" ' + (obs.comportement_rassemblements ? 'checked' : '') + '><label>Rassemblements</label>' +
+    '<input type="text" name="comportement_rassemblements_detail" value="' + (obs.comportement_rassemblements_detail || '') + '" placeholder="détails"></div>' +
+    '</div>' +
     
-    // SECTION 2: DONNÉES QUALITATIVES
-    html += '<div class="form-section"><h3>🎨 SECTION 2: DONNÉES QUALITATIVES</h3>';
-    html += '<h4>Ambiances Urbaines</h4>';
-    html += '<div class="form-group"><label>Ambiance sonore</label><select name="ambiance_sonore"><option value="">Sélectionner</option>';
-    ['Silencieux', 'Calme', 'Animé', 'Bruyant', 'Très bruyant'].forEach(a => {
-        html += makeOption(a, obs.ambiance_sonore === a);
-    });
-    html += '</select></div>';
+    // SECTION QUALITATIVE
+    '<div class="form-section"><h3>🎨 DONNÉES QUALITATIVES</h3><h4>Ambiances</h4>' +
+    '<div class="form-group"><label>Ambiance sonore</label><select name="ambiance_sonore"><option value="">Sélectionner</option>' +
+    ['Silencieux', 'Calme', 'Animé', 'Bruyant', 'Très bruyant'].map(a => '<option value="' + a + '" ' + (obs.ambiance_sonore === a ? 'selected' : '') + '>' + a + '</option>').join('') +
+    '</select></div>' +
     
-    html += '<div class="form-group"><label>Sons dominants</label><textarea name="sons_dominants">' + (obs.sons_dominants || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Ambiance visuelle</label><textarea name="ambiance_visuelle">' + (obs.ambiance_visuelle || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Ambiance olfactive</label><textarea name="ambiance_olfactive">' + (obs.ambiance_olfactive || '') + '</textarea></div>';
+    '<div class="form-group"><label>Sons dominants</label><textarea name="sons_dominants" placeholder="Décrire...">' + (obs.sons_dominants || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Ambiance visuelle</label><textarea name="ambiance_visuelle" placeholder="Éléments marquants...">' + (obs.ambiance_visuelle || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Ambiance olfactive</label><textarea name="ambiance_olfactive" placeholder="Odeurs...">' + (obs.ambiance_olfactive || '') + '</textarea></div>' +
     
-    html += '<div class="form-group"><label>Atmosphère générale</label><select name="atmosphere_generale"><option value="">Sélectionner</option>';
-    ['Apaisée', 'Tendue', 'Conviviale', 'Anonyme', 'Festive'].forEach(a => {
-        html += makeOption(a, obs.atmosphere_generale === a);
-    });
-    html += '</select></div>';
+    '<div class="form-group"><label>Atmosphère générale</label><select name="atmosphere_generale"><option value="">Sélectionner</option>' +
+    ['Apaisée', 'Tendue', 'Conviviale', 'Anonyme', 'Festive'].map(a => '<option value="' + a + '" ' + (obs.atmosphere_generale === a ? 'selected' : '') + '>' + a + '</option>').join('') +
+    '</select></div>' +
     
-    html += '<h4>Interactions Sociales Observées</h4>';
-    html += '<div class="form-group"><label>Nature des interactions</label><textarea name="nature_interactions">' + (obs.nature_interactions || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Groupes sociaux identifiés</label><textarea name="groupes_sociaux_identifies">' + (obs.groupes_sociaux_identifies || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Pratiques sociales remarquables</label><textarea name="pratiques_sociales">' + (obs.pratiques_sociales || '') + '</textarea></div>';
+    '<h4>Interactions Sociales</h4>' +
+    '<div class="form-group"><label>Nature interactions</label><textarea name="nature_interactions" placeholder="Décrire...">' + (obs.nature_interactions || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Groupes sociaux</label><textarea name="groupes_sociaux_identifies" placeholder="Décrire...">' + (obs.groupes_sociaux_identifies || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Pratiques sociales</label><textarea name="pratiques_sociales" placeholder="Décrire...">' + (obs.pratiques_sociales || '') + '</textarea></div>' +
     
-    html += '<h4>Perceptions et Discours Captés</h4>';
-    html += '<div class="form-group"><label>Conversations entendues (verbatim)</label><textarea name="conversations_verbatim">' + (obs.conversations_verbatim || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Langue(s) utilisée(s)</label><div class="checkbox-group">' + languesChecks + '</div></div>';
-    html += '<div class="form-group"><label>Thématiques évoquées</label><textarea name="thematiques_evoquees">' + (obs.thematiques_evoquees || '') + '</textarea></div>';
+    '<h4>Perceptions</h4>' +
+    '<div class="form-group"><label>Conversations (verbatim)</label><textarea name="conversations_verbatim" placeholder="\\"...\\" \\"...\\"  ">' + (obs.conversations_verbatim || '') + '</textarea></div>' +
     
-    html += '<h4>Patrimoine et Mémoire</h4>';
-    html += '<div class="form-group"><label>Éléments patrimoniaux visibles</label><textarea name="elements_patrimoniaux">' + (obs.elements_patrimoniaux || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>État de conservation</label><select name="etat_conservation"><option value="">Sélectionner</option>';
-    ['Excellent', 'Bon', 'Moyen', 'Dégradé', 'Ruine'].forEach(e => {
-        html += makeOption(e, obs.etat_conservation === e);
-    });
-    html += '</select></div>';
+    '<div class="form-group"><label>Langues utilisées</label><div class="checkbox-group">' +
+    '<div class="checkbox-item"><input type="checkbox" name="langues_utilisees" value="Arabe dialectal" ' + languesChecked('Arabe dialectal') + '><label>Arabe</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="langues_utilisees" value="Français" ' + languesChecked('Français') + '><label>Français</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="langues_utilisees" value="Tamazight" ' + languesChecked('Tamazight') + '><label>Tamazight</label></div>' +
+    '<div class="checkbox-item"><input type="checkbox" name="langues_utilisees" value="Mixte" ' + languesChecked('Mixte') + '><label>Mixte</label></div>' +
+    '</div></div>' +
     
-    html += '<div class="form-group"><label>Perception du patrimoine par les usagers</label><select name="perception_patrimoine"><option value="">Sélectionner</option>';
-    ['Valorisé', 'Ignoré', 'Détourné', 'Approprié', 'Rejeté'].forEach(p => {
-        html += makeOption(p, obs.perception_patrimoine === p);
-    });
-    html += '</select></div></div>'; // Fin SECTION 2
+    '<div class="form-group"><label>Thématiques évoquées</label><textarea name="thematiques_evoquees" placeholder="Sujets...">' + (obs.thematiques_evoquees || '') + '</textarea></div>' +
     
-    // SECTION 4: RÉFLEXIONS POST-OBSERVATION
-    html += '<div class="form-section"><h3>💭 SECTION 4: RÉFLEXIONS POST-OBSERVATION</h3>';
-    html += '<h4>Analyse à Chaud</h4>';
-    html += '<div class="form-group"><label>Impressions générales</label><textarea name="impressions_generales">' + (obs.impressions_generales || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Éléments surprenants/inattendus</label><textarea name="elements_surprenants">' + (obs.elements_surprenants || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Tensions ou conflits d\'usage observés</label><textarea name="tensions_conflits">' + (obs.tensions_conflits || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Appropriations remarquables de l\'espace</label><textarea name="appropriations_espace">' + (obs.appropriations_espace || '') + '</textarea></div>';
+    '<h4>Patrimoine</h4>' +
+    '<div class="form-group"><label>Éléments patrimoniaux</label><textarea name="elements_patrimoniaux" placeholder="Décrire...">' + (obs.elements_patrimoniaux || '') + '</textarea></div>' +
     
-    html += '<h4>Hypothèses Émergentes</h4>';
-    html += '<div class="form-group"><label>Hypothèse 1</label><textarea name="hypothese_1">' + (obs.hypothese_1 || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Hypothèse 2</label><textarea name="hypothese_2">' + (obs.hypothese_2 || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Hypothèse 3</label><textarea name="hypothese_3">' + (obs.hypothese_3 || '') + '</textarea></div></div>'; // Fin SECTION 4
+    '<div class="form-group"><label>État conservation</label><select name="etat_conservation"><option value="">Sélectionner</option>' +
+    ['Excellent', 'Bon', 'Moyen', 'Dégradé', 'Ruine'].map(e => '<option value="' + e + '" ' + (obs.etat_conservation === e ? 'selected' : '') + '>' + e + '</option>').join('') +
+    '</select></div>' +
     
-    // SECTION 5: NOTES COMPLÉMENTAIRES
-    html += '<div class="form-section"><h3>📝 SECTION 5: NOTES COMPLÉMENTAIRES</h3>';
-    html += '<div class="form-group"><label>Notes supplémentaires</label><textarea name="notes_complementaires" style="min-height: 150px;">' + (obs.notes_complementaires || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Pistes pour la prochaine observation</label><textarea name="pistes_prochaine">' + (obs.pistes_prochaine || '') + '</textarea></div>';
-    html += '<div class="form-group"><label>Questions méthodologiques</label><textarea name="questions_methodologiques">' + (obs.questions_methodologiques || '') + '</textarea></div></div>'; // Fin SECTION 5
+    '<div class="form-group"><label>Perception patrimoine</label><select name="perception_patrimoine"><option value="">Sélectionner</option>' +
+    ['Valorisé', 'Ignoré', 'Détourné', 'Approprié', 'Rejeté'].map(p => '<option value="' + p + '" ' + (obs.perception_patrimoine === p ? 'selected' : '') + '>' + p + '</option>').join('') +
+    '</select></div></div>' +
     
-    // Boutons d'action
-    html += '<div style="display: flex; gap: 10px; margin-top: 20px;">';
-    html += '<button type="submit" class="btn btn-primary" style="flex: 1; padding: 18px; font-size: 1.2em;">💾 Enregistrer</button>';
-    html += '<button type="button" class="btn btn-warning" onclick="exportOne(' + obsId + ')" style="flex: 1; padding: 18px; font-size: 1.2em;">📥 Exporter</button>';
-    html += '</div></form>';
+    // SECTION RÉFLEXIONS
+    '<div class="form-section"><h3>💭 RÉFLEXIONS POST-OBSERVATION</h3><h4>Analyse à Chaud</h4>' +
+    '<div class="form-group"><label>Impressions générales</label><textarea name="impressions_generales" placeholder="Vos impressions...">' + (obs.impressions_generales || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Éléments surprenants</label><textarea name="elements_surprenants" placeholder="Ce qui vous a surpris...">' + (obs.elements_surprenants || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Tensions/conflits</label><textarea name="tensions_conflits" placeholder="Conflits notés...">' + (obs.tensions_conflits || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Appropriations espace</label><textarea name="appropriations_espace" placeholder="Comment l\'espace est utilisé...">' + (obs.appropriations_espace || '') + '</textarea></div>' +
     
-    return html;
+    '<h4>Hypothèses Émergentes</h4>' +
+    '<div class="form-group"><label>Hypothèse 1</label><textarea name="hypothese_1" placeholder="Première hypothèse...">' + (obs.hypothese_1 || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Hypothèse 2</label><textarea name="hypothese_2" placeholder="Deuxième hypothèse...">' + (obs.hypothese_2 || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Hypothèse 3</label><textarea name="hypothese_3" placeholder="Troisième hypothèse...">' + (obs.hypothese_3 || '') + '</textarea></div></div>' +
+    
+    // SECTION NOTES
+    '<div class="form-section"><h3>📝 NOTES COMPLÉMENTAIRES</h3>' +
+    '<div class="form-group"><label>Notes supplémentaires</label><textarea name="notes_complementaires" placeholder="Informations additionnelles..." style="min-height: 150px;">' + (obs.notes_complementaires || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Pistes prochaine observation</label><textarea name="pistes_prochaine" placeholder="À observer la prochaine fois...">' + (obs.pistes_prochaine || '') + '</textarea></div>' +
+    '<div class="form-group"><label>Questions méthodologiques</label><textarea name="questions_methodologiques" placeholder="Questions sur la méthode...">' + (obs.questions_methodologiques || '') + '</textarea></div></div>' +
+    
+    '<div style="display: flex; gap: 10px; margin-top: 20px;"><button type="submit" class="btn btn-primary" style="flex: 1; padding: 18px; font-size: 1.2em;">💾 Enregistrer</button>' +
+    '<button type="button" class="btn btn-warning" onclick="exportOne('\'' + obsId + '\'')" style="flex: 1; padding: 18px; font-size: 1.2em;">📥 Exporter</button></div></form>';
 }
 
 function closeDetailsModal() {
@@ -640,12 +596,19 @@ function closeDetailsModal() {
 
 async function handleEditSubmit(event) {
     event.preventDefault();
-    
     const form = event.target;
     const formData = new FormData(form);
+
     const obs = allObservations.find(o => (o.id === currentEditId || o._id === currentEditId));
-    
-    if (!obs) return;
+    if (!obs) {
+        showMessage('❌ Observation introuvable', 'error');
+        return;
+    }
+
+    // S'assurer que l'ID existe pour IndexedDB
+    if (!obs.id) {
+        obs.id = obs._id || currentEditId;
+    }
 
     // Mise à jour de TOUS les champs
     obs.date = formData.get('date');
@@ -661,7 +624,6 @@ async function handleEditSubmit(event) {
     obs.type_espace = getCheckboxValues('type_espace', form);
     obs.intensite_interactions = formData.get('intensite_interactions');
     obs.nature_patrimoine = getCheckboxValues('nature_patrimoine', form);
-    
     obs.comptage_horaire = getComptageData(form);
     obs.frequence_intervalle = formData.get('frequence_intervalle');
     obs.nombre_rames = formData.get('nombre_rames');
@@ -688,7 +650,6 @@ async function handleEditSubmit(event) {
     obs.comportement_commerce_detail = formData.get('comportement_commerce_detail');
     obs.comportement_rassemblements = formData.get('comportement_rassemblements');
     obs.comportement_rassemblements_detail = formData.get('comportement_rassemblements_detail');
-    
     obs.ambiance_sonore = formData.get('ambiance_sonore');
     obs.sons_dominants = formData.get('sons_dominants');
     obs.ambiance_visuelle = formData.get('ambiance_visuelle');
@@ -703,7 +664,6 @@ async function handleEditSubmit(event) {
     obs.elements_patrimoniaux = formData.get('elements_patrimoniaux');
     obs.etat_conservation = formData.get('etat_conservation');
     obs.perception_patrimoine = formData.get('perception_patrimoine');
-    
     obs.impressions_generales = formData.get('impressions_generales');
     obs.elements_surprenants = formData.get('elements_surprenants');
     obs.tensions_conflits = formData.get('tensions_conflits');
@@ -711,21 +671,71 @@ async function handleEditSubmit(event) {
     obs.hypothese_1 = formData.get('hypothese_1');
     obs.hypothese_2 = formData.get('hypothese_2');
     obs.hypothese_3 = formData.get('hypothese_3');
-    
     obs.notes_complementaires = formData.get('notes_complementaires');
     obs.pistes_prochaine = formData.get('pistes_prochaine');
     obs.questions_methodologiques = formData.get('questions_methodologiques');
-    
+
+    // Marquer comme modifié et synchroniser
     obs.synced = false;
+    obs.updated_at = new Date().toISOString();
+    obs.version = (obs.version || 0) + 1;
+    normalizeObservation(obs);
 
     try {
+        // Sauvegarder localement d'abord
         await saveObservation(obs);
-        showMessage('✅ Observation mise à jour avec succès', 'success');
+        console.log('✅ Observation sauvegardée localement:', obs.id);
+
+        // Fermer le modal
         closeDetailsModal();
-        await loadAndDisplay();
+
+        // Recharger depuis le local UNIQUEMENT
+        allObservations = await getAllLocal();
+        console.log('📋 Observations sauvegardées localement:', allObservations.length);
+        displayObservations(allObservations);
+
+        // Tenter la synchronisation en arrière-plan si connecté
+        const isOnline = await checkConnection();
+        if (isOnline) {
+            try {
+                const method = (obs._id && !String(obs._id).startsWith('temp_') && String(obs._id).length === 24) ? 'PUT' : 'POST';
+                const url = obs._id 
+                    ? `${API_BASE}/api/observations/${obs._id}`
+                    : `${API_BASE}/api/observations`;
+
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(obs)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data._id) {
+                        obs._id = data._id;
+                        obs.id = data._id.toString();
+                    }
+                    if (data.version) {
+                        obs.version = data.version;
+                    }
+                    obs.synced = true;
+                    await saveObservation(obs);
+                    allObservations = await getAllLocal();
+                    displayObservations(allObservations);
+                    showMessage('✅ Observation mise à jour et synchronisée', 'success');
+                } else {
+                    showMessage('💾 Observation enregistrée localement. Synchronisation en attente.', 'info');
+                }
+            } catch (syncErr) {
+                console.error('Erreur de synchronisation:', syncErr);
+                showMessage('💾 Observation enregistrée localement. Synchronisation en attente.', 'info');
+            }
+        } else {
+            showMessage('💾 Observation enregistrée localement. Synchronisation en attente de connexion.', 'info');
+        }
     } catch (err) {
         showMessage('❌ Erreur lors de la sauvegarde', 'error');
-        console.error(err);
+        console.error('Erreur de sauvegarde:', err);
     }
 }
 
@@ -741,17 +751,33 @@ async function syncOne(id) {
     }
 
     try {
-        const res = await fetch(API_BASE + '/api/observations', {
-            method: 'POST',
+        normalizeObservation(obs);
+
+        const method = (obs._id && !String(obs._id).startsWith('temp_') && String(obs._id).length === 24) ? 'PUT' : 'POST';
+        const url = obs._id 
+            ? `${API_BASE}/api/observations/${obs._id}`
+            : `${API_BASE}/api/observations`;
+
+        const res = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(obs)
         });
 
         if (res.ok) {
+            const data = await res.json();
+            if (data._id) {
+                obs._id = data._id;
+                obs.id = data._id.toString();
+            }
+            if (data.version) {
+                obs.version = data.version;
+            }
             obs.synced = true;
             await saveObservation(obs);
             showMessage('✅ Observation synchronisée', 'success');
-            loadAndDisplay();
+            allObservations = await getAllLocal();
+            displayObservations(allObservations);
         } else {
             throw new Error('Sync failed');
         }
@@ -763,35 +789,49 @@ async function syncOne(id) {
 async function syncAll() {
     const btn = document.getElementById('sync-btn');
     btn.disabled = true;
-    btn.textContent = '⏳ Synchronisation...';
+    btn.textContent = '🔄 Synchronisation...';
 
     const isOnline = await checkConnection();
     if (!isOnline) {
         showMessage('❌ Pas de connexion Internet', 'error');
         btn.disabled = false;
-        btn.textContent = '🔄 Synchroniser';
+        btn.textContent = 'Synchroniser';
         return;
     }
 
     const pending = allObservations.filter(o => !o.synced);
-    
     if (pending.length === 0) {
         showMessage('✅ Tout est déjà synchronisé', 'info');
         btn.disabled = false;
-        btn.textContent = '🔄 Synchroniser';
+        btn.textContent = 'Synchroniser';
         return;
     }
 
     let success = 0;
     for (const obs of pending) {
         try {
-            const res = await fetch(API_BASE + '/api/observations', {
-                method: 'POST',
+            normalizeObservation(obs);
+
+            const method = (obs._id && !String(obs._id).startsWith('temp_') && String(obs._id).length === 24) ? 'PUT' : 'POST';
+            const url = obs._id 
+                ? `${API_BASE}/api/observations/${obs._id}`
+                : `${API_BASE}/api/observations`;
+
+            const res = await fetch(url, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(obs)
             });
 
             if (res.ok) {
+                const data = await res.json();
+                if (data._id) {
+                    obs._id = data._id;
+                    obs.id = data._id.toString();
+                }
+                if (data.version) {
+                    obs.version = data.version;
+                }
                 obs.synced = true;
                 await saveObservation(obs);
                 success++;
@@ -801,20 +841,22 @@ async function syncAll() {
         }
     }
 
-    showMessage('✅ ' + success + '/' + pending.length + ' observations synchronisées', 'success');
+    showMessage(`✅ ${success}/${pending.length} observations synchronisées`, 'success');
     btn.disabled = false;
-    btn.textContent = '🔄 Synchroniser';
-    loadAndDisplay();
+    btn.textContent = 'Synchroniser';
+    allObservations = await getAllLocal();
+    displayObservations(allObservations);
 }
 
 // ==================== SUPPRESSION ====================
 async function deleteObservation(id) {
     if (!confirm('Supprimer cette observation ?')) return;
-    
+
     try {
         await deleteLocal(id);
         showMessage('✅ Observation supprimée', 'success');
-        loadAndDisplay();
+        allObservations = await getAllLocal();
+        displayObservations(allObservations);
     } catch (err) {
         showMessage('❌ Erreur de suppression', 'error');
     }
@@ -834,17 +876,20 @@ async function handleImport(event) {
         try {
             const data = JSON.parse(e.target.result);
             const observations = Array.isArray(data) ? data : [data];
-            
             let imported = 0;
+
             for (const obs of observations) {
-                if (!obs.id) obs.id = Date.now() + Math.random();
+                if (!obs.id) {
+                    obs.id = Date.now() + Math.random();
+                }
                 obs.synced = false;
                 await saveObservation(obs);
                 imported++;
             }
-            
-            showMessage('✅ ' + imported + ' observation(s) importée(s)', 'success');
-            loadAndDisplay();
+
+            showMessage(`✅ ${imported} observations importées`, 'success');
+            allObservations = await getAllLocal();
+            displayObservations(allObservations);
         } catch (err) {
             showMessage('❌ Fichier JSON invalide', 'error');
             console.error(err);
@@ -856,7 +901,7 @@ async function handleImport(event) {
 
 function exportAll() {
     if (allObservations.length === 0) {
-        showMessage('⚠️ Aucune observation à exporter', 'info');
+        showMessage('❌ Aucune observation à exporter', 'info');
         return;
     }
 
@@ -865,14 +910,14 @@ function exportAll() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'observations_' + new Date().toISOString().split('T')[0] + '.json';
+    a.download = `observations_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showMessage('✅ Export réussi', 'success');
 }
 
 function exportOne(id) {
-    const obs = allObservations.find(o => (o.id === id || o._id === id));
+    const obs = allObservations.find(o => o.id === id || o._id === id);
     if (!obs) return;
 
     const json = JSON.stringify(obs, null, 2);
@@ -880,7 +925,7 @@ function exportOne(id) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'observation_' + (obs.lieu_station || 'sans-nom') + '_' + obs.date + '.json';
+    a.download = `observation_${obs.lieu_station || 'sans-nom'}_${obs.date}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showMessage('✅ Observation exportée', 'success');
@@ -889,7 +934,7 @@ function exportOne(id) {
 // ==================== RECHERCHE/FILTRAGE ====================
 function filterObservations() {
     const search = document.getElementById('search').value.toLowerCase();
-    const filtered = allObservations.filter(obs => 
+    const filtered = allObservations.filter(obs =>
         (obs.lieu_station || '').toLowerCase().includes(search) ||
         (obs.date || '').includes(search) ||
         (obs.impressions_generales || '').toLowerCase().includes(search) ||
@@ -901,10 +946,12 @@ function filterObservations() {
 // ==================== MESSAGES ====================
 function showMessage(text, type) {
     const msg = document.getElementById('message');
-    msg.className = 'message ' + type;
+    msg.className = `message ${type}`;
     msg.textContent = text;
     msg.style.display = 'block';
-    setTimeout(function() { msg.style.display = 'none'; }, 5000);
+    setTimeout(function() {
+        msg.style.display = 'none';
+    }, 5000);
 }
 
 // ==================== INITIALISATION ====================
@@ -913,12 +960,9 @@ window.addEventListener('DOMContentLoaded', async function() {
         console.log('🚀 Initialisation de l\'application...');
         await initDB();
         console.log('✅ Base de données initialisée');
-        
         await checkConnection();
         await loadAndDisplay();
-        
         setInterval(checkConnection, 30000);
-        
         console.log('✅ Application PWA prête');
     } catch (error) {
         console.error('❌ Erreur d\'initialisation:', error);
