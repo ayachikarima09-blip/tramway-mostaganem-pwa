@@ -586,7 +586,7 @@ function generateEditForm(obs) {
     '<div class="form-group"><label>Questions méthodologiques</label><textarea name="questions_methodologiques" placeholder="Questions sur la méthode...">' + (obs.questions_methodologiques || '') + '</textarea></div></div>' +
     
     '<div style="display: flex; gap: 10px; margin-top: 20px;"><button type="submit" class="btn btn-primary" style="flex: 1; padding: 18px; font-size: 1.2em;">💾 Enregistrer</button>' +
-    '<button type="button" class="btn btn-warning" onclick="exportOne('\'' + obsId + '\'')" style="flex: 1; padding: 18px; font-size: 1.2em;">📥 Exporter</button></div></form>';
+    '<button type="button" class="btn btn-warning" onclick="exportOne('" + obsId + "')" style="flex: 1; padding: 18px; font-size: 1.2em;">📥 Exporter</button></div></form>';
 }
 
 function closeDetailsModal() {
