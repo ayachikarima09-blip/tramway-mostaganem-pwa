@@ -19,7 +19,6 @@ let observationsCollection;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
 const DB_NAME = 'tramway_db';
 
-
 MongoClient.connect(MONGO_URI)
     .then(client => {
         console.log('✅ Connecté à MongoDB');
@@ -120,8 +119,8 @@ app.post('/api/observations', async (req, res) => {
         const result = await observationsCollection.insertOne(observation);
 
         console.log(`✅ POST: Nouvelle observation créée ${result.insertedId}`);
-        res.status(201).json({ 
-            success: true, 
+        res.status(201).json({
+            success: true,
             _id: result.insertedId,
             version: 1
         });
@@ -136,6 +135,15 @@ app.post('/api/observations', async (req, res) => {
 async function handleUpdate(req, res) {
     try {
         const id = req.params.id;
+
+        // ⚠️ VALIDATION: Vérifier si l'ID est temporaire ou invalide
+        if (!id || id.startsWith('temp_') || id.length !== 24) {
+            console.log(`⚠️ UPDATE refusé: ID invalide "${id}"`);
+            return res.status(400).json({ 
+                error: 'ID invalide. Utilisez POST pour créer une nouvelle observation.' 
+            });
+        }
+
         const updates = req.body;
 
         // Récupérer version actuelle
@@ -158,18 +166,18 @@ async function handleUpdate(req, res) {
         // Mettre à jour
         const result = await observationsCollection.updateOne(
             { _id: new ObjectId(id) },
-            { 
-                $set: { 
+            {
+                $set: {
                     ...updates,
                     updated_at: now,
                     version: newVersion
-                } 
+                }
             }
         );
 
         console.log(`✅ UPDATE: Observation ${id} mise à jour (v${existing.version || 0} → v${newVersion})`);
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             modified: result.modifiedCount,
             version: newVersion,
             _id: id
