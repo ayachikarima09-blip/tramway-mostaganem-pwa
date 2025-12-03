@@ -878,16 +878,13 @@ async function deleteObservation(id) {
         await deleteLocal(id);
 
         // 4. Recharger et afficher
-        showMessage('Observation supprimée', 'success');
+        showMessage('✅ Observation supprimée', 'success');
         allObservations = await getAllLocal();
         displayObservations(allObservations);
 
     } catch (err) {
-        showMessage('Erreur de suppression', 'error');
-        console.error(err);
-    }
-} catch (err) {
         showMessage('❌ Erreur de suppression', 'error');
+        console.error(err);
     }
 }
 
