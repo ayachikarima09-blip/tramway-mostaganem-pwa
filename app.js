@@ -853,11 +853,40 @@ async function deleteObservation(id) {
     if (!confirm('Supprimer cette observation ?')) return;
 
     try {
+        // 1. Vérifier la connexion
+        const isOnline = await checkConnection();
+
+        // 2. Si connecté, supprimer d'abord dans MongoDB
+        if (isOnline) {
+            try {
+                const res = await fetch(`${API_BASE}/api/observations/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (res.ok) {
+                    console.log('✅ Supprimé de MongoDB:', id);
+                } else {
+                    console.error('❌ Échec suppression MongoDB');
+                }
+            } catch (err) {
+                console.error('Erreur suppression MongoDB:', err);
+            }
+        }
+
+        // 3. Supprimer du local (IndexedDB)
         await deleteLocal(id);
-        showMessage('✅ Observation supprimée', 'success');
+
+        // 4. Recharger et afficher
+        showMessage('Observation supprimée', 'success');
         allObservations = await getAllLocal();
         displayObservations(allObservations);
+
     } catch (err) {
+        showMessage('Erreur de suppression', 'error');
+        console.error(err);
+    }
+} catch (err) {
         showMessage('❌ Erreur de suppression', 'error');
     }
 }
