@@ -2,17 +2,18 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
+
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ==================== MIDDLEWARE ====================
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
-// MongoDB Connection
+// ==================== MONGODB CONNECTION ====================
 let db;
 let observationsCollection;
 
@@ -35,6 +36,14 @@ MongoClient.connect(MONGO_URI)
         process.exit(1);
     });
 
+// ==================== FONCTIONS UTILITAIRES ====================
+
+// Vérifier si un ID est un ObjectId MongoDB valide (24 caractères hexadécimaux)
+function isValidObjectId(id) {
+    if (!id || typeof id !== 'string') return false;
+    return /^[0-9a-fA-F]{24}$/.test(id);
+}
+
 // ==================== ROUTES ====================
 
 // Health check
@@ -54,8 +63,8 @@ app.get('/api/observations', async (req, res) => {
             .sort({ created_at: -1 })
             .toArray();
 
-        console.log(`📖 GET: ${observations.length} observations récupérées`);
-        res.json({ observations });
+        console.log(`📊 GET: ${observations.length} observations récupérées`);
+        res.json(observations);
     } catch (error) {
         console.error('❌ Erreur GET:', error);
         res.status(500).json({ error: error.message });
@@ -66,15 +75,22 @@ app.get('/api/observations', async (req, res) => {
 app.get('/api/observations/:id', async (req, res) => {
     try {
         const id = req.params.id;
-        const observation = await observationsCollection.findOne({
-            _id: new ObjectId(id)
-        });
+
+        let observation;
+
+        // Essayer avec ObjectId d'abord
+        if (isValidObjectId(id)) {
+            observation = await observationsCollection.findOne({ _id: new ObjectId(id) });
+        } else {
+            // Sinon chercher par _id string (pour compatibilité avec anciennes données)
+            observation = await observationsCollection.findOne({ _id: id });
+        }
 
         if (!observation) {
             return res.status(404).json({ error: 'Observation non trouvée' });
         }
 
-        console.log(`📖 GET: Observation ${id} récupérée`);
+        console.log(`📄 GET: Observation ${id} récupérée`);
         res.json(observation);
     } catch (error) {
         console.error('❌ Erreur GET:', error);
@@ -83,9 +99,14 @@ app.get('/api/observations/:id', async (req, res) => {
 });
 
 // POST - Créer nouvelle observation
+// ⭐ CORRECTION: Force MongoDB à générer un vrai ObjectId
 app.post('/api/observations', async (req, res) => {
     try {
         const observation = req.body;
+
+        // ⭐ SUPPRIMER les champs _id et id pour forcer MongoDB à générer un ObjectId
+        delete observation._id;
+        delete observation.id;
 
         // Ajouter timestamps et versioning
         const now = new Date().toISOString();
@@ -93,63 +114,36 @@ app.post('/api/observations', async (req, res) => {
         observation.updated_at = now;
         observation.version = 1;
 
-        // Si l'observation a déjà un _id, vérifier s'il existe
-        if (observation._id) {
-            try {
-                const existing = await observationsCollection.findOne({
-                    _id: new ObjectId(observation._id)
-                });
-
-                if (existing) {
-                    // Déjà existe → rediriger vers mise à jour
-                    console.log(`⚠️ POST: Observation ${observation._id} existe déjà, mise à jour`);
-                    req.params.id = observation._id;
-                    return handleUpdate(req, res);
-                }
-            } catch (err) {
-                // Si l'ID n'est pas un ObjectId valide, continuer avec l'insertion
-                console.log('⚠️ ID invalide, création d\'une nouvelle observation');
-            }
-        }
-
-        // Retirer _id pour laisser MongoDB le générer
-        delete observation._id;
-        delete observation.id;
-
         const result = await observationsCollection.insertOne(observation);
 
-        console.log(`✅ POST: Nouvelle observation créée ${result.insertedId}`);
+        console.log(`✅ POST: Nouvelle observation créée: ${result.insertedId}`);
+
         res.status(201).json({
             success: true,
             _id: result.insertedId,
+            id: result.insertedId.toString(),
             version: 1
         });
-
     } catch (error) {
         console.error('❌ Erreur POST:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// ==================== FONCTION DE MISE À JOUR ====================
+// FONCTION DE MISE À JOUR
 async function handleUpdate(req, res) {
     try {
         const id = req.params.id;
-
-        // ⚠️ VALIDATION: Vérifier si l'ID est temporaire ou invalide
-        if (!id || id.startsWith('temp_') || id.length !== 24) {
-            console.log(`⚠️ UPDATE refusé: ID invalide "${id}"`);
-            return res.status(400).json({ 
-                error: 'ID invalide. Utilisez POST pour créer une nouvelle observation.' 
-            });
-        }
-
         const updates = req.body;
 
-        // Récupérer version actuelle
-        const existing = await observationsCollection.findOne({
-            _id: new ObjectId(id)
-        });
+        let existing;
+
+        // Chercher l'observation existante (ObjectId ou string)
+        if (isValidObjectId(id)) {
+            existing = await observationsCollection.findOne({ _id: new ObjectId(id) });
+        } else {
+            existing = await observationsCollection.findOne({ _id: id });
+        }
 
         if (!existing) {
             return res.status(404).json({ error: 'Observation non trouvée' });
@@ -164,25 +158,28 @@ async function handleUpdate(req, res) {
         delete updates.id;
 
         // Mettre à jour
-        const result = await observationsCollection.updateOne(
-            { _id: new ObjectId(id) },
-            {
-                $set: {
-                    ...updates,
-                    updated_at: now,
-                    version: newVersion
-                }
-            }
-        );
+        let result;
+        if (isValidObjectId(id)) {
+            result = await observationsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: { ...updates, updated_at: now, version: newVersion } }
+            );
+        } else {
+            result = await observationsCollection.updateOne(
+                { _id: id },
+                { $set: { ...updates, updated_at: now, version: newVersion } }
+            );
+        }
 
         console.log(`✅ UPDATE: Observation ${id} mise à jour (v${existing.version || 0} → v${newVersion})`);
+
         res.json({
             success: true,
             modified: result.modifiedCount,
             version: newVersion,
-            _id: id
+            _id: existing._id,
+            id: existing._id.toString ? existing._id.toString() : existing._id
         });
-
     } catch (error) {
         console.error('❌ Erreur UPDATE:', error);
         res.status(500).json({ error: error.message });
@@ -194,26 +191,115 @@ app.put('/api/observations/:id', handleUpdate);
 app.patch('/api/observations/:id', handleUpdate);
 
 // DELETE - Supprimer une observation
+// ⭐ CORRECTION: Accepte TOUS les types d'IDs (pour nettoyer les temp_xxx)
 app.delete('/api/observations/:id', async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await observationsCollection.deleteOne({
-            _id: new ObjectId(id)
-        });
+        console.log(`🗑️ DELETE demandé pour: ${id}`);
+
+        let result;
+
+        // Essayer avec ObjectId d'abord (IDs valides)
+        if (isValidObjectId(id)) {
+            result = await observationsCollection.deleteOne({ _id: new ObjectId(id) });
+        } else {
+            // ⭐ Accepter aussi les IDs string (temp_xxx et données corrompues)
+            result = await observationsCollection.deleteOne({ _id: id });
+        }
 
         if (result.deletedCount === 0) {
+            console.log(`⚠️ DELETE: Observation ${id} non trouvée`);
             return res.status(404).json({ error: 'Observation non trouvée' });
         }
 
-        console.log(`🗑️ DELETE: Observation ${id} supprimée`);
-        res.json({ success: true, deleted: result.deletedCount });
+        console.log(`✅ DELETE: Observation ${id} supprimée avec succès`);
+        res.json({
+            success: true,
+            deletedCount: result.deletedCount,
+            id: id
+        });
     } catch (error) {
         console.error('❌ Erreur DELETE:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
+// ⭐ NOUVEAU: Route pour migrer les observations avec IDs string vers ObjectId
+app.post('/api/migrate-ids', async (req, res) => {
+    try {
+        console.log('🔄 Démarrage de la migration des IDs...');
+
+        // Trouver toutes les observations avec _id de type string
+        const corrupted = await observationsCollection.find({ 
+            _id: { $type: "string" } 
+        }).toArray();
+
+        console.log(`📊 ${corrupted.length} observations avec IDs string trouvées`);
+
+        let migrated = 0;
+        let failed = 0;
+        const report = [];
+
+        for (const obs of corrupted) {
+            try {
+                const oldId = obs._id;
+
+                // Créer une copie sans _id
+                const newObs = { ...obs };
+                delete newObs._id;
+
+                // Insérer avec un nouvel ObjectId
+                const result = await observationsCollection.insertOne(newObs);
+
+                // Supprimer l'ancienne version
+                await observationsCollection.deleteOne({ _id: oldId });
+
+                migrated++;
+                report.push({
+                    oldId: oldId,
+                    newId: result.insertedId.toString(),
+                    status: 'success'
+                });
+
+                console.log(`✅ Migré: ${oldId} → ${result.insertedId}`);
+            } catch (err) {
+                failed++;
+                report.push({
+                    oldId: obs._id,
+                    status: 'failed',
+                    error: err.message
+                });
+                console.error(`❌ Échec migration: ${obs._id}`, err);
+            }
+        }
+
+        console.log(`✅ Migration terminée: ${migrated} succès, ${failed} échecs`);
+
+        res.json({
+            success: true,
+            total: corrupted.length,
+            migrated: migrated,
+            failed: failed,
+            report: report
+        });
+    } catch (error) {
+        console.error('❌ Erreur migration:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Démarrer le serveur
 app.listen(PORT, () => {
+    console.log(`\n${'='.repeat(50)}`);
     console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+    console.log(`${'='.repeat(50)}`);
+    console.log('Endpoints disponibles:');
+    console.log('  GET    /api/health');
+    console.log('  GET    /api/observations');
+    console.log('  GET    /api/observations/:id');
+    console.log('  POST   /api/observations');
+    console.log('  PUT    /api/observations/:id');
+    console.log('  DELETE /api/observations/:id');
+    console.log('  POST   /api/migrate-ids (⭐ NOUVEAU)');
+    console.log(`${'='.repeat(50)}\n`);
 });
