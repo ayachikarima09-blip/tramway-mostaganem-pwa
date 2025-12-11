@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carnet de Terrain - Tramway Mostaganem</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tramway Mostaganem">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <meta name="description" content="Carnet de terrain doctoral pour le tramway de Mostaganem">
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 { font-size: 1.8em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        
+        .status-bar {
+            padding: 15px 30px;
+            text-align: center;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .status-online { 
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        
+        .status-offline { 
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: white;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        main { padding: 30px; }
+        
+        .action-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-secondary { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; }
+        .btn-warning { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+        .btn-info { background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); color: #333; }
+        
+        .search-bar {
+            margin-bottom: 20px;
+        }
+        
+        .search-bar input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+        }
+        
+        .observations-list {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .observation-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            padding: 20px;
+            border-left: 5px solid #667eea;
+        }
+        
+        .observation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        
+        .observation-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .sync-badge {
+            padding: 5px 12px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        
+        .sync-badge.synced { background: #38ef7d; color: white; }
+        .sync-badge.pending { background: #fdcb6e; color: #333; }
+        
+        .observation-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+            font-size: 0.9em;
+        }
+        
+        .meta-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        
+        .meta-label {
+            font-weight: 600;
+            color: #667eea;
+            display: block;
+            font-size: 0.85em;
+        }
+        
+        .observation-content {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        
+        .observation-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 0.85em;
+            flex: 1;
+        }
+        
+        .message {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; }
+        .message.error { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+        .message.info { background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); color: #333; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .modal-content {
+            max-width: 1000px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .modal-close {
+            font-size: 2em;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+        
+        .modal-close:hover {
+            color: #667eea;
+        }
+        
+        .form-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .form-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .form-section h4 {
+            color: #764ba2;
+            margin: 20px 0 10px 0;
+            font-size: 1.05em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            font-family: inherit;
+        }
+        
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: auto;
+        }
+
+        .checkbox-with-detail {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .checkbox-with-detail label {
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .checkbox-with-detail input[type="checkbox"] {
+            width: auto;
+        }
+
+        .checkbox-with-detail input[type="text"],
+        .checkbox-with-detail input[type="number"] {
+            flex: 1;
+            min-width: 150px;
+            padding: 6px 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+        
+        .counting-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: white;
+        }
+        
+        .counting-table th,
+        .counting-table td {
+            border: 2px solid #667eea;
+            padding: 12px;
+            text-align: center;
+        }
+        
+        .counting-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .counting-table td input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .add-row-btn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .add-row-btn:hover {
+            background: #764ba2;
+        }
+        
+        input[type="file"] { display: none; }
+        
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            main { padding: 20px; }
+            .action-bar { grid-template-columns: 1fr; }
+            .form-row { grid-template-columns: 1fr; }
+            .counting-table { font-size: 0.85em; }
+            .counting-table th, .counting-table td { padding: 8px; }
+            .checkbox-group { grid-template-columns: 1fr; }
+            .modal-content { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚊 Carnet de Terrain Doctoral</h1>
+            <p>Le Tramway De Mostaganem</p>
+        </header>
+
+        <div id="status" class="status-bar status-offline">
+            <span class="status-indicator"></span>
+            <span>⏳ Initialisation en cours...</span>
+        </div>
+
+        <main>
+            <div class="action-bar">
+                <button class="btn btn-primary" onclick="openNewObservationModal()">
+                    ➕ Nouvelle Observation
+                </button>
+                <button class="btn btn-secondary" id="sync-btn" onclick="backgroundSync()">
+                    🔄 Synchroniser
+                </button>
+                <button class="btn btn-info" onclick="importObservations()">
+                    📥 Importer JSON
+                </button>
+                <button class="btn btn-warning" onclick="exportAll()">
+                    📤 Exporter Tout
+                </button>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" id="search" placeholder="🔍 Rechercher..." >
+            </div>
+
+            <div id="message"></div>
+            <div id="observations-container"></div>
+        </main>
+    </div>
+
+    <!-- MODAL NOUVELLE OBSERVATION -->
+    <div id="new-observation-modal" class="modal" onclick="if(event.target===this) closeNewObservationModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📋 Nouvelle Observation</h2>
+                <span class="modal-close" onclick="closeNewObservationModal()">&times;</span>
+            </div>
+            
+            <form id="observation-form" onsubmit="return handleNewObservationSubmit(event)">
+                
+                <!-- IDENTIFICATION DE LA SESSION -->
+                <div class="form-section">
+                    <h3>📋 IDENTIFICATION DE LA SESSION</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Date *</label>
+                            <input type="date" name="date" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Jour</label>
+                            <select name="jour">
+                                <option value="">Sélectionner</option>
+                                <option value="Lundi">Lundi</option>
+                                <option value="Mardi">Mardi</option>
+                                <option value="Mercredi">Mercredi</option>
+                                <option value="Jeudi">Jeudi</option>
+                                <option value="Vendredi">Vendredi</option>
+                                <option value="Samedi">Samedi</option>
+                                <option value="Dimanche">Dimanche</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Heure début</label>
+                            <input type="time" name="heure_debut">
+                        </div>
+                        <div class="form-group">
+                            <label>Heure fin</label>
+                            <input type="time" name="heure_fin">
+                        </div>
+                        <div class="form-group">
+                            <label>Durée totale (min)</label>
+                            <input type="number" name="duree_totale" min="0">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Station/Tronçon</label>
+                            <input type="text" name="lieu_station">
+                        </div>
+                        <div class="form-group">
+                            <label>Quartier/Emplacement exact</label>
+                            <input type="text" name="quartier">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Météo (plusieurs choix possibles)</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="meteo" value="Ensoleillé">
+                                <label>Ensoleillé</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="meteo" value="Nuageux">
+                                <label>Nuageux</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="meteo" value="Pluie">
+                                <label>Pluie</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="meteo" value="Vent">
+                                <label>Vent</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Température estimée (°C)</label>
+                            <input type="number" name="temperature" min="-10" max="60">
+                        </div>
+                        <div class="form-group">
+                            <label>Type d'observation</label>
+                            <select name="type_observation">
+                                <option value="">Sélectionner</option>
+                                <option value="Statique (poste fixe)">Statique (poste fixe)</option>
+                                <option value="Mobile (parcours)">Mobile (parcours)</option>
+                                <option value="Mixte">Mixte</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Type d'espace observé (TE) - MULTICHOIX</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="type_espace" value="TE-S: Station de tramway">
+                                <label>TE-S: Station de tramway</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="type_espace" value="TE-B: À bord du tramway">
+                                <label>TE-B: À bord du tramway</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="type_espace" value="TE-A: Abords immédiats (<50m)">
+                                <label>TE-A: Abords immédiats (<50m)</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="type_espace" value="TE-P: Espace public connexe">
+                                <label>TE-P: Espace public connexe</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="type_espace" value="TE-C: Corridor/axe du tramway">
+                                <label>TE-C: Corridor/axe du tramway</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Intensité des interactions (II)</label>
+                        <select name="intensite_interactions">
+                            <option value="">Sélectionner</option>
+                            <option value="II-1: Faible (interactions isolées)">II-1: Faible (interactions isolées)</option>
+                            <option value="II-2: Modérée (interactions régulières)">II-2: Modérée (interactions régulières)</option>
+                            <option value="II-3: Forte (espace très animé)">II-3: Forte (espace très animé)</option>
+                            <option value="II-4: Très forte (événement/concentration)">II-4: Très forte (événement/concentration)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nature du patrimoine visible (NP) - MULTICHOIX</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="nature_patrimoine" value="NP-A: Architecture coloniale">
+                                <label>NP-A: Architecture coloniale</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="nature_patrimoine" value="NP-B: Bâti traditionnel">
+                                <label>NP-B: Bâti traditionnel</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="nature_patrimoine" value="NP-C: Architecture moderne/contemporaine">
+                                <label>NP-C: Architecture moderne/contemporaine</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="nature_patrimoine" value="NP-P: Patrimoine paysager">
+                                <label>NP-P: Patrimoine paysager</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="nature_patrimoine" value="NP-I: Patrimoine immatériel">
+                                <label>NP-I: Patrimoine immatériel</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="nature_patrimoine" value="NP-M: Patrimoine mémoriel">
+                                <label>NP-M: Patrimoine mémoriel</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 1: DONNÉES QUANTITATIVES -->
+                <div class="form-section">
+                    <h3>📊 SECTION 1: DONNÉES QUANTITATIVES</h3>
+                    
+                    <h4>Flux et Fréquentation</h4>
+                    
+                    <div class="form-group">
+                        <label>Comptage des usagers par horaire</label>
+                        <table class="counting-table">
+                            <thead>
+                                <tr>
+                                    <th>Horaire</th>
+                                    <th>Montées</th>
+                                    <th>Descentes</th>
+                                    <th>Attente station</th>
+                                    <th>Observations</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comptage-table-new">
+                                <tr>
+                                    <td><input type="time" class="time-input"></td>
+                                    <td><input type="number" class="number-input" min="0" value="0"></td>
+                                    <td><input type="number" class="number-input" min="0" value="0"></td>
+                                    <td><input type="number" class="number-input" min="0" value="0"></td>
+                                    <td><input type="text" class="text-input" placeholder="obs..."></td>
+                                    <td><button type="button" class="remove-row-btn" onclick="this.closest('tr').remove()">❌</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <button type="button" class="add-row-btn" onclick="addComptageRowNew()">➕ Ajouter une ligne</button>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Fréquence des rames - Intervalle moyen (min)</label>
+                            <input type="number" name="frequence_intervalle" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Nombre de rames passées</label>
+                            <input type="number" name="nombre_rames" min="0">
+                        </div>
+                    </div>
+
+                    <h4>Profil des Usagers (% approximatif)</h4>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Hommes (%)</label>
+                            <input type="number" name="profil_hommes" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Femmes (%)</label>
+                            <input type="number" name="profil_femmes" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Enfants < 12 ans (%)</label>
+                            <input type="number" name="profil_enfants" min="0" max="100">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Adolescents 12-18 (%)</label>
+                            <input type="number" name="profil_adolescents" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Adultes 18-65 (%)</label>
+                            <input type="number" name="profil_adultes" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Personnes âgées > 65 (%)</label>
+                            <input type="number" name="profil_ages" min="0" max="100">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>PMR (Personnes à Mobilité Réduite) (%)</label>
+                        <input type="number" name="profil_pmr" min="0" max="100">
+                    </div>
+
+                    <h4>Comportements Observables (cocher et quantifier)</h4>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_telephone" value="oui">
+                            <label>Utilisation du téléphone</label>
+                            <input type="text" name="comportement_telephone_detail" placeholder="% ou détails">
+                        </div>
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_lecture" value="oui">
+                            <label>Lecture/journal</label>
+                            <input type="text" name="comportement_lecture_detail" placeholder="% ou détails">
+                        </div>
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_conversations" value="oui">
+                            <label>Conversations</label>
+                            <input type="text" name="comportement_conversations_detail" placeholder="% ou détails">
+                        </div>
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_attente_assise" value="oui">
+                            <label>Attente assise</label>
+                            <input type="text" name="comportement_attente_assise_detail" placeholder="% ou détails">
+                        </div>
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_attente_debout" value="oui">
+                            <label>Attente debout</label>
+                            <input type="text" name="comportement_attente_debout_detail" placeholder="% ou détails">
+                        </div>
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_regard_fenetre" value="oui">
+                            <label>Regarder à travers la fenêtre/dans le vide</label>
+                            <input type="text" name="comportement_regard_fenetre_detail" placeholder="% ou détails">
+                        </div>
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_commerce" value="oui">
+                            <label>Activités commerciales informelles</label>
+                            <input type="text" name="comportement_commerce_detail" placeholder="% ou détails">
+                        </div>
+                        <div class="checkbox-with-detail">
+                            <input type="checkbox" name="comportement_rassemblements" value="oui">
+                            <label>Rassemblements/groupes</label>
+                            <input type="text" name="comportement_rassemblements_detail" placeholder="% ou détails">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: DONNÉES QUALITATIVES -->
+                <div class="form-section">
+                    <h3>🎨 SECTION 2: DONNÉES QUALITATIVES</h3>
+                    
+                    <h4>Ambiances Urbaines</h4>
+
+                    <div class="form-group">
+                        <label>Ambiance sonore</label>
+                        <select name="ambiance_sonore">
+                            <option value="">Sélectionner</option>
+                            <option value="Silencieux">Silencieux</option>
+                            <option value="Calme">Calme</option>
+                            <option value="Animé">Animé</option>
+                            <option value="Bruyant">Bruyant</option>
+                            <option value="Très bruyant">Très bruyant</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Sons dominants</label>
+                        <textarea name="sons_dominants" placeholder="Décrire les sons principaux..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ambiance visuelle</label>
+                        <textarea name="ambiance_visuelle" placeholder="Éléments marquants (couleurs, lumière, mobilier, signalétique)..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ambiance olfactive</label>
+                        <textarea name="ambiance_olfactive" placeholder="Odeurs particulières..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Atmosphère générale</label>
+                        <select name="atmosphere_generale">
+                            <option value="">Sélectionner</option>
+                            <option value="Apaisée">Apaisée</option>
+                            <option value="Tendue">Tendue</option>
+                            <option value="Conviviale">Conviviale</option>
+                            <option value="Anonyme">Anonyme</option>
+                            <option value="Festive">Festive</option>
+                        </select>
+                    </div>
+
+                    <h4>Interactions Sociales Observées</h4>
+
+                    <div class="form-group">
+                        <label>Nature des interactions</label>
+                        <textarea name="nature_interactions" placeholder="Décrire le type d'interactions..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Groupes sociaux identifiés</label>
+                        <textarea name="groupes_sociaux_identifies" placeholder="Décrire les groupes observés..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Pratiques sociales remarquables</label>
+                        <textarea name="pratiques_sociales" placeholder="Décrire les pratiques notables..."></textarea>
+                    </div>
+
+                    <h4>Perceptions et Discours Captés</h4>
+
+                    <div class="form-group">
+                        <label>Conversations entendues (verbatim)</label>
+                        <textarea name="conversations_verbatim" placeholder='"..." "..." "..."'></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Langue(s) utilisée(s)</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="langues_utilisees" value="Arabe dialectal">
+                                <label>Arabe dialectal</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="langues_utilisees" value="Français">
+                                <label>Français</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="langues_utilisees" value="Tamazight">
+                                <label>Tamazight</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" name="langues_utilisees" value="Mixte">
+                                <label>Mixte</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Thématiques évoquées</label>
+                        <textarea name="thematiques_evoquees" placeholder="Sujets de conversations..."></textarea>
+                    </div>
+
+                    <h4>Patrimoine et Mémoire</h4>
+
+                    <div class="form-group">
+                        <label>Éléments patrimoniaux visibles</label>
+                        <textarea name="elements_patrimoniaux" placeholder="Décrire les éléments patrimoniaux..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>État de conservation</label>
+                        <select name="etat_conservation">
+                            <option value="">Sélectionner</option>
+                            <option value="Excellent">Excellent</option>
+                            <option value="Bon">Bon</option>
+                            <option value="Moyen">Moyen</option>
+                            <option value="Dégradé">Dégradé</option>
+                            <option value="Ruine">Ruine</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Perception du patrimoine par les usagers</label>
+                        <select name="perception_patrimoine">
+                            <option value="">Sélectionner</option>
+                            <option value="Valorisé">Valorisé</option>
+                            <option value="Ignoré">Ignoré</option>
+                            <option value="Détourné">Détourné</option>
+                            <option value="Approprié">Approprié</option>
+                            <option value="Rejeté">Rejeté</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- SECTION 4: RÉFLEXIONS POST-OBSERVATION -->
+                <div class="form-section">
+                    <h3>💭 SECTION 4: RÉFLEXIONS POST-OBSERVATION</h3>
+                    
+                    <h4>Analyse à Chaud</h4>
+
+                    <div class="form-group">
+                        <label>Impressions générales</label>
+                        <textarea name="impressions_generales" placeholder="Vos impressions immédiates..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Éléments surprenants/inattendus</label>
+                        <textarea name="elements_surprenants" placeholder="Ce qui vous a surpris..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tensions ou conflits d'usage observés</label>
+                        <textarea name="tensions_conflits" placeholder="Conflits ou tensions notés..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Appropriations remarquables de l'espace</label>
+                        <textarea name="appropriations_espace" placeholder="Comment l'espace est-il utilisé..."></textarea>
+                    </div>
+
+                    <h4>Hypothèses Émergentes</h4>
+
+                    <div class="form-group">
+                        <label>Hypothèse 1</label>
+                        <textarea name="hypothese_1" placeholder="Première hypothèse..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Hypothèse 2</label>
+                        <textarea name="hypothese_2" placeholder="Deuxième hypothèse..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Hypothèse 3</label>
+                        <textarea name="hypothese_3" placeholder="Troisième hypothèse..."></textarea>
+                    </div>
+                </div>
+
+                <!-- SECTION 5: NOTES COMPLÉMENTAIRES -->
+                <div class="form-section">
+                    <h3>📝 SECTION 5: NOTES COMPLÉMENTAIRES</h3>
+                    
+                    <div class="form-group">
+                        <label>Notes supplémentaires</label>
+                        <textarea name="notes_complementaires" placeholder="Toute information additionnelle..." style="min-height: 150px;"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Pistes pour la prochaine observation</label>
+                        <textarea name="pistes_prochaine" placeholder="Ce qu'il faudrait observer la prochaine fois..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Questions méthodologiques</label>
+                        <textarea name="questions_methodologiques" placeholder="Questions sur la méthode d'observation..."></textarea>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 18px; font-size: 1.2em;">
+                    💾 Enregistrer l'Observation
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DÉTAILS/ÉDITION OBSERVATION -->
+    <div id="details-modal" class="modal" onclick="if(event.target===this) closeDetailsModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📋 Détails de l'observation</h2>
+                <span class="modal-close" onclick="closeDetailsModal()">&times;</span>
+            </div>
+            <div id="details-content"></div>
+        </div>
+    </div>
+
+    
+
+    <script src="app.js"></script>
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(reg => console.log('✅ Service Worker enregistré:', reg.scope))
+                    .catch(err => console.error('❌ Erreur Service Worker:', err));
+            });
+        }
+    </script>
+</body>
+</html>
